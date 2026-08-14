@@ -1,7 +1,7 @@
 {
     "name":  "dsh-openwolf",
-    "version":  "0.1.0",
-    "description":  "A compact code-map \u0027second brain\u0027 for DeepSeek Harness: pre-indexed project maps, per-file digests, and AGENTS.md injection so the agent stops re-reading whole files.",
+    "version":  "0.2.0-rc.1",
+    "description":  "A compact code-map \u0027second brain\u0027 for DeepSeek Harness: pre-indexed project maps, per-file digests, session digests, read/write interception, and AGENTS.md injection so the agent stops re-reading whole files.",
     "type":  "module",
     "main":  "lib/index.js",
     "types":  "lib/index.d.ts",
@@ -51,6 +51,7 @@
                      },
     "peerDependencies":  {
                              "@deepseek-ai/cordis":  "^4.0.1",
+                             "@deepseek-ai/dsh-llm":  "^0.1.0-rc.6",
                              "@deepseek-ai/dsh-tools":  "^0.1.0-rc.6"
                          },
     "devDependencies":  {

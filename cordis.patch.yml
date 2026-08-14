@@ -37,3 +37,13 @@
         symbols: true
         debounceMs: 1000
         sortBy: path
+        # ── v0.2: the .wolf/ brain (OpenWolf-class context core) ──────────
+        brainEnabled: true
+        brainDir: .wolf
+        sessionDigestBudgetTokens: 1500
+        rescanIntervalHours: 6
+        symbolThresholdTokens: 500
+        digestEnabled: true
+        interceptReads: true
+        interceptWrites: true
+        compactionSurvival: true

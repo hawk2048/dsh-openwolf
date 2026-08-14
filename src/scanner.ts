@@ -9,8 +9,8 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { sep } from 'node:path'
 import { isIgnored, loadRootGitignore, compilePatterns, type IgnoreContext } from './ignore.ts'
-import { detectLang, extractSymbols, firstMeaningfulLine, isBinary } from './symbols.ts'
-import type { CodeMap, DirEntry, FileDigest, FileEntry, ScanOptions } from './types.ts'
+import { detectLang, extractSymbolHits, firstMeaningfulLine, isBinary } from './symbols.ts'
+import type { CodeMap, DirEntry, FileDigest, FileEntry, ScanOptions, SymbolLine } from './types.ts'
 
 /** POSIX-ify a relative path. */
 export function toPosix(relPath: string): string {
@@ -32,30 +32,44 @@ export async function buildIgnoreContext(root: string, opts: ScanOptions): Promi
 }
 
 /** Analyze one file's content into a {@link FileEntry}. */
-function analyzeText(filePath: string, text: string, opts: ScanOptions): FileEntry {
+function analyzeText(filePath: string, text: string, mtimeMs: number, opts: ScanOptions): FileEntry {
   const lang = detectLang(filePath)
   const lines = text.split(/\r?\n/).length - 1
   const summary = firstMeaningfulLine(text, SUMMARY_MAX_LEN)
-  const symbols = opts.symbols ? extractSymbols(text, lang, MAX_SYMBOLS_PER_FILE) : []
-  return { path: filePath, size: text.length, lines, symbols, summary, lang, skipped: false }
+  const hits = opts.symbols ? extractSymbolHits(text, lang, MAX_SYMBOLS_PER_FILE) : []
+  const symbols = hits.map((h) => h.name)
+  const symbolLines: SymbolLine[] = hits.map((h) => ({ name: h.name, line: h.line }))
+  return {
+    path: filePath,
+    size: text.length,
+    lines,
+    symbols,
+    symbolLines,
+    summary,
+    lang,
+    tokens: Math.max(1, Math.ceil(text.length / 4)),
+    mtimeMs,
+    skipped: false,
+  }
 }
 
 /** Analyze one file into a {@link FileEntry}, honoring size caps and binaries. */
-export async function analyzeFile(filePath: string, size: number, opts: ScanOptions): Promise<FileEntry> {
+export async function analyzeFile(filePath: string, size: number, mtimeMs: number, opts: ScanOptions): Promise<FileEntry> {
   const lang = detectLang(filePath)
+  const tokens = Math.max(1, Math.ceil(size / 4))
   if (size > opts.maxFileBytes) {
-    return { path: filePath, size, lines: 0, symbols: [], summary: '[file too large]', lang, skipped: true }
+    return { path: filePath, size, lines: 0, symbols: [], summary: '[file too large]', lang, tokens, mtimeMs, skipped: true }
   }
   let buf: Buffer
   try {
     buf = await readFile(filePath)
   } catch {
-    return { path: filePath, size, lines: 0, symbols: [], summary: '[unreadable]', lang, skipped: true }
+    return { path: filePath, size, lines: 0, symbols: [], summary: '[unreadable]', lang, tokens, mtimeMs, skipped: true }
   }
   if (isBinary(buf)) {
-    return { path: filePath, size: buf.length, lines: 0, symbols: [], summary: '[binary]', lang: 'binary', skipped: true }
+    return { path: filePath, size: buf.length, lines: 0, symbols: [], summary: '[binary]', lang: 'binary', tokens, mtimeMs, skipped: true }
   }
-  return analyzeText(filePath, buf.toString('utf8'), opts)
+  return analyzeText(filePath, buf.toString('utf8'), mtimeMs, opts)
 }
 
 /**
@@ -112,13 +126,16 @@ export async function scanCodebase(root: string, opts: ScanOptions): Promise<Cod
         }
         scanned++
         let size = 0
+        let mtimeMs = 0
         try {
-          size = (await stat(`${dirAbs}/${entry.name}`)).size
+          const st = await stat(`${dirAbs}/${entry.name}`)
+          size = st.size
+          mtimeMs = st.mtimeMs
         } catch {
           skippedFiles++
           continue
         }
-        const fileEntry = await analyzeFile(`${dirAbs}/${entry.name}`, size, opts)
+        const fileEntry = await analyzeFile(`${dirAbs}/${entry.name}`, size, mtimeMs, opts)
         fileEntry.path = toPosix(rel)
         files.push(fileEntry)
         totalLines += fileEntry.lines
@@ -191,7 +208,7 @@ export async function summarizeFile(root: string, relPath: string, opts: ScanOpt
   }
   const text = buf.toString('utf8')
   digest.lines = text.split(/\r?\n/).length - 1
-  if (opts.symbols) digest.symbols = extractSymbols(text, lang, MAX_SYMBOLS_PER_FILE)
+  if (opts.symbols) digest.symbols = extractSymbolHits(text, lang, MAX_SYMBOLS_PER_FILE).map((h) => h.name)
   const previewLen = Math.max(256, Math.min(previewBytes, opts.maxFileBytes))
   digest.preview = text.slice(0, previewLen)
   digest.previewTruncated = text.length > previewLen

@@ -18,12 +18,24 @@ export interface FileEntry {
   lines: number
   /** Extracted top-level symbols (bounded by the scanner). */
   symbols: string[]
+  /** Symbol hits with 1-based start lines (bounded), for offset/limit hints. */
+  symbolLines?: SymbolLine[]
   /** One-line summary: the first meaningful line of the file. */
   summary: string
   /** Short language tag (`ts`, `py`, `go`, `text`, `binary`, ...). */
   lang: string
+  /** Estimated tokens (char-ratio heuristic). */
+  tokens: number
+  /** File mtime (epoch ms) at scan time — hint staleness check. */
+  mtimeMs?: number
   /** True when the file was too large to open (or binary). */
   skipped: boolean
+}
+
+/** A top-level symbol and the line where it starts. */
+export interface SymbolLine {
+  name: string
+  line: number
 }
 
 /** Aggregated counts for one directory. */

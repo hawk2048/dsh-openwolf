@@ -36,20 +36,33 @@ const COMMENT_PREFIXES = ['#', '//', '/*', '*', '--', '<!--', ';', '%', '"""', "
 
 const IMPORT_PREFIXES = ['import ', 'from ', 'require(', 'package ', 'using ', '#include', '#define', '#pragma', 'module ', 'use ']
 
+/** A top-level symbol with its 1-based start line. */
+export interface SymbolHit {
+  name: string
+  line: number
+}
+
 /** Extract top-level symbols for a language. Bounded, regex-based. */
 export function extractSymbols(text: string, lang: string, max: number): string[] {
-  const symbols: string[] = []
-  const push = (name: string | undefined) => {
+  return extractSymbolHits(text, lang, max).map((h) => h.name)
+}
+
+/** Extract top-level symbols with their start lines (for offset/limit hints). */
+export function extractSymbolHits(text: string, lang: string, max: number): SymbolHit[] {
+  const symbols: SymbolHit[] = []
+  const push = (name: string | undefined, line: number) => {
     if (name === undefined || name === '') return
     if (symbols.length >= max) return
-    if (!symbols.includes(name)) symbols.push(name)
+    if (!symbols.some((s) => s.name === name)) symbols.push({ name, line })
   }
 
   const lineRe = (re: RegExp) => {
-    for (const line of text.split(/\r?\n/)) {
+    const lines = text.split(/\r?\n/)
+    for (let i = 0; i < lines.length; i++) {
       if (symbols.length >= max) break
-      const m = line.match(re)
-      if (m !== null) push(m[1] ?? m[2])
+      const m = lines[i]?.match(re)
+      if (m == null) continue
+      push(m[1] ?? m[2] ?? '', i + 1)
     }
   }
 
