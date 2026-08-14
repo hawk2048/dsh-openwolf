@@ -1,0 +1,104 @@
+# OpenWolf Port Plan (v0.2 → v0.x)
+
+Goal: **feature-complete replication of [OpenWolf v2.0.1](https://www.npmjs.com/package/openwolf) on DeepSeek Harness**, implemented natively as DSH plugins (MIT, independent implementation — the reference source is AGPL-3.0 and is used **only to understand the feature set and mechanisms, never copied**).
+
+Source of truth for this inventory: the published `openwolf@2.0.1` npm tarball (README, `dist/src/**`, `dist/hooks/**`), read on 2026-08-14.
+
+## 1. Feature inventory (confirmed from source)
+
+### A. Context Management
+| # | Feature | Mechanism (from source) | DSH seam |
+|---|---|---|---|
+| A1 | **Session digest** | Budget-capped (default 1500 tok, per-agent budgets in `config.json`) context injected at SessionStart via `additionalContext`; priority order: STATUS.md 🚀 section → Do-Not-Repeat (last 10) → recent 5 bugs → anatomy pointer | `agent.inject()` / agent-instructions preload seam |
+| A2 | **Compaction survival** | PreCompact hook snapshots `_session.json`; SessionStart(source=`compact`) re-injects "files already modified this session" digest | need DSH compaction event seam (research) |
+| A3 | **Staleness detection** | anatomy scan pins `git HEAD` + `rescan_interval_hours` (default 6h); SessionStart warns "run scan before relying" | git rev-parse + config check in plugin |
+| A4 | **STATUS.md handoff** | end-of-phase doc, `## 🚀` section extracted into digest | workspace `.wolf/STATUS.md` + `wolf_status` tool |
+| A5 | **cerebrum.md** | learned preferences / corrections / Do-Not-Repeat list; freshness reminders (warn if <3 entries or >3 days old) | `.wolf/cerebrum.md` + reminders |
+| A6 | **memory.md** | chronological action log with token estimates, session header per session | `.wolf/memory.md` + write events |
+| A7 | **buglog.json** | bug-fix memory; searchable (`openwolf bug search`); empty-state reminder | `.wolf/buglog.json` + `wolf_bug` tool |
+
+### B. Project Anatomy
+| # | Feature | Mechanism | DSH seam |
+|---|---|---|---|
+| B1 | **anatomy-index.json** | durable per-file store: description, token estimate, content hash, size, mtime, symbols; cross-process lock; content-hash absorb of manual edits | `.wolf/anatomy-index.json` + lock (fs-safe) |
+| B2 | **anatomy.md** | human-readable render of the index | rendered view (reuse renderMap) |
+| B3 | **Symbol index** | files >500 est. tok index top-level symbols: kind/name/startLine/endLine/~tokens; langs TS/JS/Py/Go/Rust | v0.2 lezer backend + token estimate |
+| B4 | **Description extractor** | 49 KB per-language heuristics (route/controller detection, exports summary, schema detection, …) | port independently, or reuse summary heuristics + language-specific additions |
+| B5 | **Pre-read hint** | before big-file reads: description + ~tokens + top-5 symbols w/ line ranges for offset/limit reads; suppressed when size/mtime changed since index | `tools/pre-execute` on the `read` tool (research exact args) |
+| B6 | **Repeated-read warning** | `_session.json` tracks files_read w/ count+tokens; warn on 2nd read | same hook |
+| B7 | **Post-write update** | edits update index under lock + log action to memory.md | `tools/post-execute` on write/edit tools |
+| B8 | **Secret exclusion** | sensitive extensions + basenames (.env, .npmrc, keys, keystores…) never indexed | port the denylist |
+
+### C. Token Intelligence
+| # | Feature | Mechanism | DSH seam |
+|---|---|---|---|
+| C1 | **Token estimate** | char-ratio heuristic (~15%) | reuse; DSH token meter exists for real numbers |
+| C2 | **token-ledger.json** | per-session/per-agent estimated + measured (input/output/cache reads/writes, API calls) | read real usage from DSH `ctx.tokenMeter` / session telemetry instead of transcripts |
+| C3 | **openwolf report** | estimated vs measured report | `wolf_report` tool or web panel |
+
+### D. Multi-agent
+OpenWolf wires 5 external agents (Claude Code / Codex / OpenCode / Gemini / Cursor) via their native hook/context mechanisms. **Not applicable to DSH** — DSH is the agent platform itself; the equivalent is "one brain for all DSH sessions/subagents", which the plugin architecture gives for free.
+
+### E. Init layout (`.wolf/`)
+`config.json` (per-agent budgets, rescan interval, dashboard port/token), `OPENWOLF.md` operating protocol, `hooks/` (7 zero-dep hooks). DSH equivalent: `config` schema (plugin config) + a `wolf_init` tool / first-run bootstrap that creates `.wolf/`.
+
+### F. Security
+Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpolation); realpath/symlink-safe traversal guards on cron file access; secret denylist; security regression tests.
+
+### G. Skills
+| # | Feature | DSH seam |
+|---|---|---|
+| G1 | `/security-audit [scope]` — layered dep/secrets/injection/authz audit → severity-ranked report → buglog | DSH skill or `ctx.commands` command |
+| G2 | `/reframe [migrate\|audit\|fix]` — UI framework design brain (13-framework KB) | DSH skill |
+
+### H. Platform
+| # | Feature | DSH seam |
+|---|---|---|
+| H1 | **Dashboard** (React, dot-matrix; tokens/cache/context-health/handoff/activity/cron/anatomy browser; deep links; auth) | DSH client plugin (slots) or docs page |
+| H2 | **Daemon** (file-watcher, health, cron-engine via node-cron) | `ctx.jobs` + `@deepseek-ai/dsh-schedule` (already installed) |
+| H3 | **CLI commands** init/status/scan/`scan --check`/report/dashboard/daemon/cron/bug/update/restore | `wolf_*` tools + optional `dsh-openwolf/bin` CLI |
+
+## 2. Gap analysis — current dsh-openwolf v0.1
+
+| Already done | Missing (v0.2 → v0.x) |
+|---|---|
+| code map (path + lines + summary + symbols) | per-file token estimate + symbol line ranges + description richness (B3/B4) |
+| AGENTS.md managed-block injection | budget-capped **session digest** from multiple sources (A1) |
+| ignore/gitignore-lite matcher | secret-file denylist (B8) |
+| staleness via watcher | git-HEAD pin + age-based staleness + rescan reminder (A3) |
+| wolf_map / wolf_file / wolf_refresh | read/write interception hooks (B5/B6/B7), memory/buglog/cerebrum (A4-A7), token ledger/report (C), skills (G), dashboard/daemon/cron (H) |
+
+## 3. Phased port plan
+
+### P0 — Context core (v0.2, smallest useful replica of OpenWolf's value)
+- `.wolf/` bootstrap (`wolf_init`) + `config.json` equivalent (per-agent budget, rescan interval)
+- **Session digest** (A1): STATUS 🚀 + Do-Not-Repeat + recent bugs + anatomy pointer, budget-capped, injected at session start through the agent-instructions seam; **staleness warning** (A3)
+- **Read interception** (B5/B6): via `tools/pre-execute` on `read`/`read_file`: repeated-read warning, anatomy hint + symbol line-range hints, staleness-suppressed
+- **Write interception** (B7): `tools/post-execute` on write/edit → index update + memory.md log
+- Compaction survival (A2) if a DSH seam exists; otherwise document the gap
+
+### P1 — Memory & measurement (v0.3)
+- memory.md action log, buglog + `wolf_bug search`, cerebrum learning reminders (A4-A7)
+- token-ledger + `wolf_report` using DSH `ctx.tokenMeter` real numbers (C1-C3)
+- secret denylist (B8), cross-process lock + content-hash absorb (B1)
+- description-extractor port (B4)
+
+### P2 — Anatomy engine parity (v0.4)
+- lezer symbol backend + >500-token threshold + line ranges + per-symbol token estimate (B3)
+- `wolf_scan --check`-style integrity verify; post-write incremental updates (B7 complete)
+- anatomy.md render parity (B2)
+
+### P3 — Platform (v0.5+)
+- skills: `wolf/security-audit`, `wolf/reframe` (G1/G2) as DSH skills
+- dashboard as a DSH **client plugin** (H1) reusing DSH web slots; daemon/cron via `ctx.jobs` + `dsh-schedule` (H2); CLI via `dsh-openwolf/bin` (H3)
+
+## 4. Research items before implementation
+
+1. DSH compaction event seam (does `tools/` or `agent/*` expose a pre-compaction hook? check `dsh-compaction-basic` + event map) — gates A2.
+2. `tools/pre-execute` payload for the `read`/`write` tools (exact args: `file_path`? `path`?) — gates B5/B6/B7.
+3. `ctx.tokenMeter` API for measured per-session usage — gates C2.
+4. `agent.inject()` semantics for dynamic digest injection vs. the agent-instructions baseline — gates A1.
+
+## 5. Licensing note
+
+The reference implementation is AGPL-3.0. dsh-openwolf remains MIT: features are reimplemented from the documented behavior, no code is copied, and no dependency on the reference package is introduced.
