@@ -144,28 +144,30 @@ export class WolfBrain {
     this.dir = join(root, dirName)
   }
 
-  /** Create the brain directory and default files if missing. */
+  /** Create the brain directory and default files if missing (race-safe). */
   async ensure(): Promise<void> {
     await mkdir(join(this.dir, 'hooks'), { recursive: true })
-    for (const file of ['STATUS.md', 'cerebrum.md', 'memory.md']) {
-      const p = join(this.dir, file)
-      try {
-        await stat(p)
-      } catch {
-        await this.writeText(p, this.defaultMarkdown(file))
+    await this.withLock(async () => {
+      for (const file of ['STATUS.md', 'cerebrum.md', 'memory.md']) {
+        const p = join(this.dir, file)
+        try {
+          await stat(p)
+        } catch {
+          await this.writeText(p, this.defaultMarkdown(file))
+        }
       }
-    }
-    for (const [file, data] of [
-      ['config.json', DEFAULT_CONFIG],
-      ['buglog.json', { version: 1, bugs: [] }],
-      ['token-ledger.json', { version: 1, lifetime: { total_sessions: 0 }, sessions: [] }],
-    ] as const) {
-      try {
-        await stat(join(this.dir, file))
-      } catch {
-        await this.writeJSON(join(this.dir, file), data)
+      for (const [file, data] of [
+        ['config.json', DEFAULT_CONFIG],
+        ['buglog.json', { version: 1, bugs: [] }],
+        ['token-ledger.json', { version: 1, lifetime: { total_sessions: 0 }, sessions: [] }],
+      ] as const) {
+        try {
+          await stat(join(this.dir, file))
+        } catch {
+          await this.writeJSON(join(this.dir, file), data)
+        }
       }
-    }
+    })
   }
 
   private defaultMarkdown(file: string): string {
@@ -208,7 +210,9 @@ export class WolfBrain {
 
   private async writeText(p: string, text: string): Promise<void> {
     await mkdir(dirname(p), { recursive: true })
-    const tmp = `${p}.tmp`
+    // Unique temp name per call: concurrent writers never clobber each other's
+    // in-flight temp before rename.
+    const tmp = `${p}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
     await writeFile(tmp, text, 'utf8')
     await rename(tmp, p)
   }

@@ -304,7 +304,16 @@ export function apply(ctx: Context, config: Config) {
   // ── compaction snapshot + token ledger (session/event) ────────────────
   ctx.on('session/event', async (session, event) => {
     const type = (event as { type: string }).type
-    const root = (session as { header?: { cwd?: string } }).header?.cwd
+    // Web GUI sessions can keep a turn open across many user messages, so
+    // `turn/end` alone never fires for them; the ledger is upserted on every
+    // `assistant/message` instead (provider-reported usage when available).
+    const sessionId = String((session as { id?: unknown }).id ?? 'unknown')
+    const root =
+      (session as { header?: { cwd?: string } }).header?.cwd ??
+      (() => {
+        const agents = ctx.get('agents') as { get?: (id: unknown) => { session?: { header?: { cwd?: string } } } | undefined } | undefined
+        return agents?.get?.((session as { id?: unknown }).id)?.session?.header?.cwd
+      })()
     if (root === undefined) return
     const brain = await brainOf(root)
     if (brain === null) return
@@ -312,28 +321,37 @@ export function apply(ctx: Context, config: Config) {
       if (!config.compactionSurvival) return
       try {
         await brain.snapshotPrecompact(await brain.readSession(), 'auto')
-      } catch {
-        // best-effort
+      } catch (err: unknown) {
+        console.warn(`[dsh-openwolf] compaction snapshot failed: ${err instanceof Error ? err.message : String(err)}`)
       }
       return
     }
-    if (type === 'turn/end') {
-      // Measure the session from the harness token meter and upsert the ledger.
+    if (type === 'turn/end' || type === 'assistant/message') {
       try {
-        const meter = ctx.get('tokenMeter')
         let measured = 0
-        if (meter !== undefined) {
-          try {
-            measured = (meter as { measure: (s: unknown) => { totalTokens: number } }).measure(session).totalTokens
-          } catch {
-            measured = 0
+        if (type === 'assistant/message') {
+          // Provider-reported usage when the adapter attached it.
+          const usage = (event as { data?: { usage?: unknown } }).data?.usage
+          if (usage !== null && typeof usage === 'object') {
+            const u = usage as Record<string, number | undefined>
+            measured = (u.inputTokens ?? 0) + (u.outputTokens ?? 0) + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0)
+          }
+        }
+        if (measured === 0) {
+          const meter = ctx.get('tokenMeter')
+          if (meter !== undefined) {
+            try {
+              measured = (meter as { measure: (s: unknown) => { totalTokens: number } }).measure(session).totalTokens
+            } catch {
+              measured = 0
+            }
           }
         }
         const agents = ctx.get('agents') as { get?: (id: unknown) => { options?: { model?: string } } | undefined } | undefined
         const agent = agents?.get?.((session as { id?: unknown }).id)
-        await brain.recordSessionUsage(String((session as { id?: unknown }).id ?? 'unknown'), agent?.options?.model, measured)
-      } catch {
-        // best-effort
+        await brain.recordSessionUsage(sessionId, agent?.options?.model, measured)
+      } catch (err: unknown) {
+        console.warn(`[dsh-openwolf] ledger upsert failed: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
   })
