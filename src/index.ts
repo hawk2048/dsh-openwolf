@@ -263,6 +263,27 @@ export function apply(ctx: Context, config: Config) {
       if (digest !== '') {
         agent.inject(wolfMessage(digest))
       }
+      // Housekeeping reminders: nudge the model to keep the brain fed.
+      try {
+        const cerebrum = await brain.readCerebrum()
+        const entryLines = cerebrum.split('\n').filter((l) => {
+          const t = l.trim()
+          return t.startsWith('- ') || t.startsWith('* ')
+        })
+        const buglog = await brain.readBuglog()
+        const reminders: string[] = []
+        if (entryLines.length < 3) {
+          reminders.push(`💡 .wolf/cerebrum.md has only ${entryLines.length} entr${entryLines.length === 1 ? 'y' : 'ies'}. Record preferences, conventions, and mistakes with wolf_learn this session.`)
+        }
+        if (buglog.bugs.length === 0) {
+          reminders.push('📋 .wolf/buglog.json is empty. Log any bugs you find or fix with wolf_bug.')
+        }
+        if (reminders.length > 0) {
+          agent.inject(wolfMessage(reminders.join('\n')))
+        }
+      } catch {
+        // best-effort
+      }
       // Reset per-session read/write tracking for a fresh session.
       await brain.writeSession({
         session_id: agent.id ?? '',
@@ -280,18 +301,40 @@ export function apply(ctx: Context, config: Config) {
     }
   })
 
-  // ── compaction snapshot (belt-and-braces) ─────────────────────────────
+  // ── compaction snapshot + token ledger (session/event) ────────────────
   ctx.on('session/event', async (session, event) => {
-    if (!config.compactionSurvival) return
-    if ((event as { type: string }).type !== 'compaction/start') return
+    const type = (event as { type: string }).type
     const root = (session as { header?: { cwd?: string } }).header?.cwd
     if (root === undefined) return
     const brain = await brainOf(root)
     if (brain === null) return
-    try {
-      await brain.snapshotPrecompact(await brain.readSession(), 'auto')
-    } catch {
-      // best-effort
+    if (type === 'compaction/start') {
+      if (!config.compactionSurvival) return
+      try {
+        await brain.snapshotPrecompact(await brain.readSession(), 'auto')
+      } catch {
+        // best-effort
+      }
+      return
+    }
+    if (type === 'turn/end') {
+      // Measure the session from the harness token meter and upsert the ledger.
+      try {
+        const meter = ctx.get('tokenMeter')
+        let measured = 0
+        if (meter !== undefined) {
+          try {
+            measured = (meter as { measure: (s: unknown) => { totalTokens: number } }).measure(session).totalTokens
+          } catch {
+            measured = 0
+          }
+        }
+        const agents = ctx.get('agents') as { get?: (id: unknown) => { options?: { model?: string } } | undefined } | undefined
+        const agent = agents?.get?.((session as { id?: unknown }).id)
+        await brain.recordSessionUsage(String((session as { id?: unknown }).id ?? 'unknown'), agent?.options?.model, measured)
+      } catch {
+        // best-effort
+      }
     }
   })
 
@@ -760,6 +803,7 @@ export function apply(ctx: Context, config: Config) {
         properties: {
           totalSessions: { type: 'number', required: true },
           totalEstimatedTokens: { type: 'number', required: true },
+          totalMeasuredTokens: { type: 'number' },
           currentSessionTokens: { type: 'number' },
           report: { type: 'string', required: true },
         },
@@ -771,25 +815,29 @@ export function apply(ctx: Context, config: Config) {
       const brain = await brainOf(root)
       if (brain === null) throw new Error('brain is disabled (brainEnabled=false)')
       const ledger = await brain.readLedger()
-      const totalEstimated = (ledger.sessions as Array<{ estimated_tokens?: number }>)
-        .reduce((sum, s) => sum + (s.estimated_tokens ?? 0), 0)
+      const sessions = ledger.sessions as Array<{ measured_tokens?: number; estimated_tokens?: number }>
+      const totalMeasured = sessions.reduce((sum, s) => sum + (s.measured_tokens ?? 0), 0)
+      const totalEstimated = sessions.reduce((sum, s) => sum + (s.estimated_tokens ?? 0), 0)
       let currentTokens: number | undefined
       const meter = ctx.get('tokenMeter')
       const agent = exec.agent as { session?: unknown } | undefined
       if (meter !== undefined && agent?.session !== undefined) {
         try {
-          currentTokens = meter.measure(agent.session as never).totalTokens
+          currentTokens = (meter as { measure: (s: unknown) => { totalTokens: number } }).measure(agent.session).totalTokens
         } catch {
           currentTokens = undefined
         }
       }
       const lines = [
-        `token ledger: ${ledger.lifetime.total_sessions} sessions, ~${totalEstimated.toLocaleString()} estimated tokens`,
-        ...(currentTokens !== undefined ? [`current session (measured by harness meter): ~${currentTokens.toLocaleString()} tokens`] : []),
-      ]
+        `token ledger: ${ledger.lifetime.total_sessions} sessions`,
+        totalMeasured > 0 ? `measured (harness token meter): ~${totalMeasured.toLocaleString()} tokens` : `measured: none recorded yet`,
+        totalEstimated > 0 ? `estimated (heuristic): ~${totalEstimated.toLocaleString()} tokens` : '',
+        ...(currentTokens !== undefined ? [`current session: ~${currentTokens.toLocaleString()} tokens`] : []),
+      ].filter((l) => l !== '')
       return {
         totalSessions: ledger.lifetime.total_sessions,
         totalEstimatedTokens: totalEstimated,
+        ...(totalMeasured > 0 ? { totalMeasuredTokens: totalMeasured } : {}),
         ...(currentTokens !== undefined ? { currentSessionTokens: currentTokens } : {}),
         report: lines.join('\n'),
       }

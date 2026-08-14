@@ -23,7 +23,7 @@
  * @module dsh-openwolf/brain
  */
 
-import { mkdir, readFile, writeFile, rename, readdir, unlink, stat } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, rename, readdir, unlink, stat, rm } from 'node:fs/promises'
 import { join, dirname, basename } from 'node:path'
 
 /** Default brain configuration (independent default values). */
@@ -81,6 +81,15 @@ export interface ScanState {
   total_files?: number
   total_lines?: number
 }
+
+/** Ledger shape (estimated fields kept for backward compat). */
+export interface Ledger {
+  version: number
+  lifetime: { total_sessions: number }
+  sessions: Array<{ session_id: string; agent?: string; measured_tokens?: number; estimated_tokens?: number; at: string }>
+}
+
+const DEFAULT_LEDGER: Ledger = { version: 1, lifetime: { total_sessions: 0 }, sessions: [] }
 
 /** One bug-fix record in the buglog. */
 export interface BugRecord {
@@ -229,26 +238,30 @@ export class WolfBrain {
   }
 
   async appendCerebrum(section: string, entry: string): Promise<void> {
-    const text = await this.readCerebrum()
-    const marker = `## ${section}`
-    const line = `- ${entry.replace(/\r?\n/g, ' ')}`
-    if (text.includes(marker)) {
-      // Insert right after the heading's first blank line.
-      const idx = text.indexOf(marker)
-      const afterHeading = text.indexOf('\n', idx)
-      const insertAt = text.indexOf('\n\n', afterHeading) === -1 ? text.length : text.indexOf('\n\n', afterHeading) + 2
-      await this.writeText(join(this.dir, 'cerebrum.md'), `${text.slice(0, insertAt)}${line}\n${text.slice(insertAt)}`)
-    } else {
-      await this.writeText(join(this.dir, 'cerebrum.md'), `${text.trimEnd()}\n\n${marker}\n\n${line}\n`)
-    }
+    await this.withLock(async () => {
+      const text = await this.readCerebrum()
+      const marker = `## ${section}`
+      const line = `- ${entry.replace(/\r?\n/g, ' ')}`
+      if (text.includes(marker)) {
+        // Insert right after the heading's first blank line.
+        const idx = text.indexOf(marker)
+        const afterHeading = text.indexOf('\n', idx)
+        const insertAt = text.indexOf('\n\n', afterHeading) === -1 ? text.length : text.indexOf('\n\n', afterHeading) + 2
+        await this.writeText(join(this.dir, 'cerebrum.md'), `${text.slice(0, insertAt)}${line}\n${text.slice(insertAt)}`)
+      } else {
+        await this.writeText(join(this.dir, 'cerebrum.md'), `${text.trimEnd()}\n\n${marker}\n\n${line}\n`)
+      }
+    })
   }
 
   async appendMemory(action: string, files: string[], outcome = 'ok', tokens = 0): Promise<void> {
-    const now = new Date()
-    const stamp = `${now.toISOString().slice(0, 10)} ${now.toTimeString().slice(0, 5)}`
-    const filesCell = files.slice(0, 4).join(', ') + (files.length > 4 ? ` +${files.length - 4}` : '')
-    const row = `| ${stamp} | ${action.replace(/\|/g, '\\|')} | \`${filesCell}\` | ${outcome} | ${tokens} |\n`
-    await this.writeText(join(this.dir, 'memory.md'), `${(await this.readText(join(this.dir, 'memory.md'))).trimEnd()}\n${row}`)
+    await this.withLock(async () => {
+      const now = new Date()
+      const stamp = `${now.toISOString().slice(0, 10)} ${now.toTimeString().slice(0, 5)}`
+      const filesCell = files.slice(0, 4).join(', ') + (files.length > 4 ? ` +${files.length - 4}` : '')
+      const row = `| ${stamp} | ${action.replace(/\|/g, '\\|')} | \`${filesCell}\` | ${outcome} | ${tokens} |\n`
+      await this.writeText(join(this.dir, 'memory.md'), `${(await this.readText(join(this.dir, 'memory.md'))).trimEnd()}\n${row}`)
+    })
   }
 
   // ── buglog ────────────────────────────────────────────────────────────
@@ -258,17 +271,19 @@ export class WolfBrain {
   }
 
   async logBug(errorMessage: string, fix: string, file?: string): Promise<BugRecord> {
-    const log = await this.readBuglog()
-    const record: BugRecord = {
-      id: `bug-${log.bugs.length + 1}-${Date.now().toString(36)}`,
-      error_message: errorMessage.slice(0, 500),
-      fix: fix.slice(0, 2000),
-      ...(file !== undefined ? { file } : {}),
-      at: new Date().toISOString(),
-    }
-    log.bugs.push(record)
-    await this.writeJSON(join(this.dir, 'buglog.json'), log)
-    return record
+    return this.withLock(async () => {
+      const log = await this.readBuglog()
+      const record: BugRecord = {
+        id: `bug-${log.bugs.length + 1}-${Date.now().toString(36)}`,
+        error_message: errorMessage.slice(0, 500),
+        fix: fix.slice(0, 2000),
+        ...(file !== undefined ? { file } : {}),
+        at: new Date().toISOString(),
+      }
+      log.bugs.push(record)
+      await this.writeJSON(join(this.dir, 'buglog.json'), log)
+      return record
+    })
   }
 
   async searchBugs(term: string, limit = 10): Promise<BugRecord[]> {
@@ -285,18 +300,31 @@ export class WolfBrain {
 
   // ── token ledger ──────────────────────────────────────────────────────
 
-  async recordSessionUsage(sessionId: string, agent: string | undefined, estimated: number): Promise<void> {
-    const ledger = await this.readJSON<{ version: number; lifetime: { total_sessions: number }; sessions: unknown[] }>(
-      join(this.dir, 'token-ledger.json'),
-      { version: 1, lifetime: { total_sessions: 0 }, sessions: [] },
-    )
-    ledger.lifetime.total_sessions += 1
-    ledger.sessions.push({ session_id: sessionId, agent, estimated_tokens: estimated, at: new Date().toISOString() })
-    await this.writeJSON(join(this.dir, 'token-ledger.json'), ledger)
+  /** Upsert a session's usage into the ledger; appends a new entry on first sight. */
+  async recordSessionUsage(sessionId: string, agent: string | undefined, measured: number, at?: string): Promise<void> {
+    await this.withLock(async () => {
+      const ledger = await this.readJSON<Ledger>(join(this.dir, 'token-ledger.json'), DEFAULT_LEDGER)
+      const existing = (ledger.sessions as Array<{ session_id: string }>).findIndex((s) => s.session_id === sessionId)
+      if (existing !== -1) {
+        const session = ledger.sessions[existing] as Record<string, unknown>
+        session.measured_tokens = measured
+        session.at = at ?? new Date().toISOString()
+        if (agent !== undefined) session.agent = agent
+      } else {
+        ledger.lifetime.total_sessions += 1
+        ledger.sessions.push({
+          session_id: sessionId,
+          ...(agent !== undefined ? { agent } : {}),
+          measured_tokens: measured,
+          at: at ?? new Date().toISOString(),
+        })
+      }
+      await this.writeJSON(join(this.dir, 'token-ledger.json'), ledger)
+    })
   }
 
-  async readLedger(): Promise<{ version: number; lifetime: { total_sessions: number }; sessions: unknown[] }> {
-    return this.readJSON(join(this.dir, 'token-ledger.json'), { version: 1, lifetime: { total_sessions: 0 }, sessions: [] })
+  async readLedger(): Promise<Ledger> {
+    return this.readJSON<Ledger>(join(this.dir, 'token-ledger.json'), DEFAULT_LEDGER)
   }
 
   // ── session + scan state ──────────────────────────────────────────────
@@ -338,6 +366,49 @@ export class WolfBrain {
       }
     } catch {
       // no-op
+    }
+  }
+
+  // ── cross-process lock ────────────────────────────────────────────────
+
+  private static readonly LOCK_FILE = '.lock'
+  private static readonly LOCK_STALE_MS = 10_000
+  private static readonly LOCK_RETRY_MS = 25
+  private static readonly LOCK_TIMEOUT_MS = 5_000
+
+  /**
+   * Run `fn` under a cross-process exclusive lock (`.wolf/.lock`, exclusive
+   * create + retry + stale-lock steal). Protects read-modify-write races
+   * between concurrent hook fires or separate harness processes.
+   */
+  async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const lockPath = join(this.dir, WolfBrain.LOCK_FILE)
+    const started = Date.now()
+    for (;;) {
+      try {
+        await mkdir(lockPath)
+        break
+      } catch {
+        // Lock held; steal when stale.
+        try {
+          const st = await stat(lockPath)
+          if (Date.now() - st.mtimeMs > WolfBrain.LOCK_STALE_MS) {
+            await rm(lockPath, { recursive: true, force: true })
+            continue
+          }
+        } catch {
+          // Lock vanished; retry acquisition.
+        }
+        if (Date.now() - started > WolfBrain.LOCK_TIMEOUT_MS) {
+          throw new Error(`[dsh-openwolf] could not acquire brain lock ${lockPath}`)
+        }
+        await new Promise((resolve) => setTimeout(resolve, WolfBrain.LOCK_RETRY_MS))
+      }
+    }
+    try {
+      return await fn()
+    } finally {
+      await rm(lockPath, { recursive: true, force: true }).catch(() => {})
     }
   }
 }

@@ -60,7 +60,8 @@ test('scanCodebase builds a compact map with ignores applied', async () => {
   assert.equal(index.lang, 'ts')
   assert.equal(index.lines, 5)
   assert.deepEqual(index.symbols, ['createApp', 'Server', 'version'])
-  assert.equal(index.summary, 'export const version = "1.0.0"')
+  // Language-aware description: exports summary replaces the bare first line.
+  assert.equal(index.summary, 'Exports version, createApp')
   const readme = map.files.find((f) => f.path === 'README.md')!
   assert.equal(readme.lang, 'md')
   // dirs aggregates

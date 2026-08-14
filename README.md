@@ -79,10 +79,12 @@ When `brainEnabled` is on, each workspace gets a `.wolf/` directory:
 └── hooks/               # session state, scan state (git HEAD pin), precompact snapshots
 ```
 
-- **Session digest** — on `agent/session-start`, a budget-capped digest is injected via `agent.inject()`: STATUS 🚀 next phase → Do-Not-Repeat (last 10) → recent 5 bugs → anatomy pointer. A **staleness warning** is prepended when the pinned git HEAD moved or the last scan is older than `rescanIntervalHours`.
-- **Read interception** — on `tools/post-execute` of `read`: an anatomy hint (`path — summary (~tokens)`), and for files above `symbolThresholdTokens`, the top symbols with line numbers for `offset`/`limit` reads. Hints are suppressed when the file changed since indexing. Re-reading the same file in one session warns with the earlier token cost.
+- **Session digest** — on `agent/session-start`, a budget-capped digest is injected via `agent.inject()`: STATUS 🚀 next phase → Do-Not-Repeat (last 10) → recent 5 bugs → anatomy pointer. A **staleness warning** is prepended when the pinned git HEAD moved or the last scan is older than `rescanIntervalHours`. Housekeeping reminders nudge the model to keep the brain fed (sparse cerebrum → `wolf_learn`; empty buglog → `wolf_bug`).
+- **Read interception** — on `tools/post-execute` of `read`: an anatomy hint (`path — summary (~tokens)`), and for files above `symbolThresholdTokens`, the top symbols with line numbers for `offset`/`limit` reads. Hints are suppressed when the file changed since indexing. Re-reading the same file in one session warns with the earlier token cost. Summaries are **language-aware** (`src/description.ts`): exports summaries, HTTP route detection, zod-schema and JSON-metadata recognition, module docstrings.
 - **Write interception** — `write`/`edit` results are logged to `memory.md`, tracked in session state, and the single changed file is re-analyzed into the cached map.
 - **Compaction survival** — a `compaction/start` snapshot plus a `session-start(source: compact)` restore digest listing files already modified this session.
+- **Token ledger (measured)** — on every `turn/end` the harness token meter (`ctx.tokenMeter`) measures the session and upserts it into `token-ledger.json` by session id; `wolf_report` shows measured totals.
+- **Cross-process lock** — `.wolf/.lock` (exclusive-create + stale-lock steal) serializes read-modify-write updates so concurrent hook fires never lose rows.
 - **Secret hygiene** — `.env`, `.npmrc`, keys, keystores and friends never enter hints or logs.
 
 ## Config
@@ -139,8 +141,9 @@ dsh --profile <name> --dump-config | grep -A2 openwolf
 
 - **Scanner** (`src/scanner.ts`): walks the workspace with a gitignore-lite matcher (negation, `**`, anchored patterns, directory rules), a file budget, and a size cap; skips binaries, over-large files, and secrets; extracts per-file symbols (with line numbers) and one-line summaries; estimates tokens; aggregates per-directory counts.
 - **Renderer** (`src/render.ts`): groups entries by directory into a bounded Markdown map and manages the `AGENTS.md` block (create / replace / preserve, idempotent).
-- **Brain** (`src/brain.ts`): the durable `.wolf/` store — config, STATUS, cerebrum, memory, buglog, token ledger, session/scan state — with atomic writes and a secret denylist.
+- **Brain** (`src/brain.ts`): the durable `.wolf/` store — config, STATUS, cerebrum, memory, buglog, token ledger, session/scan state — with atomic writes, a cross-process lock (`.wolf/.lock`), and a secret denylist.
 - **Digest** (`src/digest.ts`): budget-capped session digest construction and git-HEAD staleness detection.
+- **Description** (`src/description.ts`): language-aware one-line file descriptions (exports summaries, HTTP routes, schemas, docstrings, JSON metadata).
 - **Plugin** (`src/index.ts`): caches maps per workspace root, lazily starts a debounced chokidar watcher, resolves the workspace from the calling agent's session (`agent.session.header.cwd`), injects the session digest on `agent/session-start`, intercepts `read`/`write`/`edit` on `tools/post-execute` (attaching model-facing hints via `additionalContexts`), snapshots on `compaction/start`, and registers eight tools on `ctx.tools`. Every registration is an effect: unloading the plugin (config edit, HMR, restart) unwinds watchers, timers, and tools.
 
 The scanner/analyzer is dependency-free and exported for reuse; `scanCodebase`, `summarizeFile`, `renderMap`, `injectBlock`, `WolfBrain`, and the digest builders are public API.

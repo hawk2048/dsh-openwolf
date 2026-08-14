@@ -10,6 +10,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { sep } from 'node:path'
 import { isIgnored, loadRootGitignore, compilePatterns, type IgnoreContext } from './ignore.ts'
 import { detectLang, extractSymbolHits, firstMeaningfulLine, isBinary } from './symbols.ts'
+import { describeFile } from './description.ts'
 import type { CodeMap, DirEntry, FileDigest, FileEntry, ScanOptions, SymbolLine } from './types.ts'
 
 /** POSIX-ify a relative path. */
@@ -35,7 +36,9 @@ export async function buildIgnoreContext(root: string, opts: ScanOptions): Promi
 function analyzeText(filePath: string, text: string, mtimeMs: number, opts: ScanOptions): FileEntry {
   const lang = detectLang(filePath)
   const lines = text.split(/\r?\n/).length - 1
-  const summary = firstMeaningfulLine(text, SUMMARY_MAX_LEN)
+  // Language-aware description (exports/routes/schema/docstring) with a
+  // first-meaningful-line fallback — richer map entries and read hints.
+  const summary = describeFile(text, filePath, SUMMARY_MAX_LEN)
   const hits = opts.symbols ? extractSymbolHits(text, lang, MAX_SYMBOLS_PER_FILE) : []
   const symbols = hits.map((h) => h.name)
   const symbolLines: SymbolLine[] = hits.map((h) => ({ name: h.name, line: h.line }))

@@ -106,3 +106,38 @@ test('estimateTokens is a positive char-ratio heuristic', () => {
   assert.equal(estimateTokens(''), 1)
   assert.ok(estimateTokens('a'.repeat(400)) >= 95 && estimateTokens('a'.repeat(400)) <= 105)
 })
+
+test('recordSessionUsage upserts by session id', async () => {
+  await brain.recordSessionUsage('sess-1', 'claude', 1000)
+  await brain.recordSessionUsage('sess-1', 'claude', 2500)
+  await brain.recordSessionUsage('sess-2', undefined, 500)
+  const ledger = await brain.readLedger()
+  assert.equal(ledger.lifetime.total_sessions, 2)
+  assert.equal(ledger.sessions.length, 2)
+  const s1 = ledger.sessions.find((s) => s.session_id === 'sess-1')
+  assert.equal(s1?.measured_tokens, 2500)
+})
+
+test('withLock serializes concurrent appends (no lost rows)', async () => {
+  const b2 = new WolfBrain(root, '.wolf')
+  await Promise.all(
+    Array.from({ length: 20 }, (_, i) => b2.appendMemory('write', [`f${i}.ts`], 'ok', i)),
+  )
+  const memory = await readFile(join(root, '.wolf/memory.md'), 'utf8')
+  const rows = memory.split('\n').filter((l) => /f\d+\.ts/.test(l))
+  assert.equal(rows.length, 20)
+})
+
+test('withLock steals a stale lock', async () => {
+  const b2 = new WolfBrain(root, '.wolf')
+  const { mkdir, utimes } = await import('node:fs/promises')
+  const lockPath = join(root, '.wolf/.lock')
+  await mkdir(lockPath)
+  const old = new Date(Date.now() - 11_000)
+  await utimes(lockPath, old, old)
+  const value = await b2.withLock(() => Promise.resolve(42))
+  assert.equal(value, 42)
+  // Lock released afterwards.
+  await assert.rejects(() => b2.withLock(() => Promise.reject(new Error('x'))), /x/)
+  await rm(lockPath, { recursive: true, force: true })
+})

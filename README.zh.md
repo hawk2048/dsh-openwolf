@@ -65,10 +65,12 @@ allowBuilds:
 └── hooks/               # 会话状态、扫描状态（git HEAD 钉住）、压缩前快照
 ```
 
-- **会话摘要** —— `agent/session-start` 时经 `agent.inject()` 注入预算封顶的摘要：STATUS 🚀 下一阶段 → Do-Not-Repeat（最近 10 条）→ 最近 5 个 bug → anatomy 指针；钉住的 git HEAD 移动或上次扫描超过 `rescanIntervalHours` 时，前缀**陈旧警告**。
-- **读拦截** —— `read` 工具的 `tools/post-execute`：anatomy 提示（`path — summary (~tokens)`）；超过 `symbolThresholdTokens` 的文件给出前 5 个符号的行号，引导 offset/limit 定向读；文件在索引后变过则抑制提示。同会话重复读同一文件会警告并给出此前 token 成本。
+- **会话摘要** —— `agent/session-start` 时经 `agent.inject()` 注入预算封顶的摘要：STATUS 🚀 下一阶段 → Do-Not-Repeat（最近 10 条）→ 最近 5 个 bug → anatomy 指针；钉住的 git HEAD 移动或上次扫描超过 `rescanIntervalHours` 时，前缀**陈旧警告**。另有**维护提醒**（cerebrum 条目过少 → 用 `wolf_learn`；buglog 为空 → 用 `wolf_bug`）。
+- **读拦截** —— `read` 工具的 `tools/post-execute`：anatomy 提示（`path — summary (~tokens)`）；超过 `symbolThresholdTokens` 的文件给出前 5 个符号的行号，引导 offset/limit 定向读；文件在索引后变过则抑制提示。同会话重复读同一文件会警告并给出此前 token 成本。摘要**语言感知**（`src/description.ts`）：导出摘要、HTTP 路由识别、zod schema 与 JSON 元数据识别、模块 docstring。
 - **写拦截** —— `write`/`edit` 结果写入 `memory.md`、记入会话状态，并把该文件单文件重分析进缓存地图。
 - **压缩幸存** —— `compaction/start` 快照 + `session-start(source: compact)` 恢复摘要（列出本会话已修改文件）。
+- **token 账本（实测）** —— 每个 `turn/end` 用 harness token meter（`ctx.tokenMeter`）测量并按 session_id upsert 进 `token-ledger.json`；`wolf_report` 展示实测总量。
+- **跨进程锁** —— `.wolf/.lock`（独占创建 + 陈旧锁抢占）串行化读改写更新，并发 hook 触发不丢行。
 - **秘密文件卫生** —— `.env`、`.npmrc`、密钥、凭据等绝不进入提示或日志。
 
 此外，当 `injectAgentsMd` 开启时，插件会维护工作区 `AGENTS.md` 内的一个受管块：
