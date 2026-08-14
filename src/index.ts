@@ -31,6 +31,7 @@ import { scanCodebase, summarizeFile, analyzeFile, dirsFromFiles } from './scann
 import { injectBlock, renderMap } from './render.ts'
 import { WolfBrain, isSensitiveFile } from './brain.ts'
 import { buildSessionDigestWithWarning, buildSessionDigest, currentGitHead, anatomyStaleReason } from './digest.ts'
+import { bundledSkills } from './skills.ts'
 import type { CodeMap, FileEntry, ScanOptions, SymbolBackend } from './types.ts'
 
 /** Plugin display name used in diagnostics. */
@@ -85,6 +86,10 @@ export interface Config {
   interceptWrites: boolean
   /** Snapshot session state on compaction (survival belt-and-braces). */
   compactionSurvival: boolean
+  /** Register the bundled skills (wolf-security-audit, wolf-reframe). */
+  skillsEnabled: boolean
+  /** Auto-rescan cached roots every N minutes (0 = off). */
+  autoRescanMinutes: number
 }
 
 /** Config schema — validated at load; defaults fill omitted fields. */
@@ -114,6 +119,8 @@ export const Config: Schema<Config> = Schema.object({
   interceptReads: Schema.boolean().default(true),
   interceptWrites: Schema.boolean().default(true),
   compactionSurvival: Schema.boolean().default(true),
+  skillsEnabled: Schema.boolean().default(true),
+  autoRescanMinutes: Schema.number().min(0).max(24 * 60).default(0),
 })
 
 /** Derive scan options from validated config. */
@@ -124,9 +131,9 @@ function scanOptionsOf(config: Config): ScanOptions {
     symbols: config.symbols,
     symbolBackend: config.symbolBackend,
     hidden: config.hidden,
-    // The instruction file itself carries the managed map block; exclude it so
-    // the map does not list (or recurse into) its own output.
-    extraIgnore: [...config.ignore, config.agentsMdFile],
+    // The instruction file carries the map block and the brain dir is
+    // infrastructure — both stay out of the map.
+    extraIgnore: [...config.ignore, config.agentsMdFile, config.brainDir],
     useGitignore: config.useGitignore,
     sortBy: config.sortBy,
   }
@@ -245,6 +252,29 @@ export function apply(ctx: Context, config: Config) {
     brains.clear()
     timers.clear()
   })
+
+  // ── bundled skills (registry is host-plane; optional when absent) ─────
+  if (config.skillsEnabled) {
+    const skills = ctx.get('skills')
+    if (skills !== undefined) {
+      for (const skill of bundledSkills) {
+        skills.register(skill)
+      }
+    }
+  }
+
+  // ── auto-rescan: keep cached roots fresh without tool calls ───────────
+  if (config.autoRescanMinutes > 0) {
+    const timer = setInterval(() => {
+      for (const root of [...cache.keys()]) {
+        void refresh(root).catch((err: unknown) => {
+          console.warn(`[dsh-openwolf] auto-rescan failed for ${root}: ${err instanceof Error ? err.message : String(err)}`)
+        })
+      }
+    }, config.autoRescanMinutes * 60_000)
+    timer.unref?.() // one-shot processes can still exit
+    timers.add(timer)
+  }
 
   // ── session digest injection (agent/session-start) ────────────────────
   ctx.on('agent/session-start', async ({ agent, source }) => {

@@ -407,6 +407,21 @@ export class WolfBrain {
     await this.writeJSON(join(this.dir, 'hooks/_scan-state.json'), state)
   }
 
+  /** Persist a lightweight file manifest (CLI `scan --check` baseline). */
+  async writeScanManifest(entries: Array<{ path: string; size: number; mtimeMs: number }>): Promise<void> {
+    await this.withLock(async () => {
+      await this.writeJSON(join(this.dir, 'hooks/_scan-manifest.json'), {
+        version: 1,
+        at: new Date().toISOString(),
+        files: entries,
+      })
+    })
+  }
+
+  async readScanManifest(): Promise<{ at?: string; files: Array<{ path: string; size: number; mtimeMs: number }> }> {
+    return this.readJSON(join(this.dir, 'hooks/_scan-manifest.json'), { files: [] })
+  }
+
   async snapshotPrecompact(session: SessionState, trigger: string): Promise<void> {
     await this.writeJSON(join(this.dir, 'hooks/_precompact-snapshot.json'), {
       at: new Date().toISOString(),

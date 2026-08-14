@@ -120,9 +120,30 @@ All options are schema-validated at load; omitted fields use defaults. Override 
     interceptReads: true      # repeated-read warnings + anatomy hints
     interceptWrites: true     # action log + single-file index refresh
     compactionSurvival: true  # snapshot + restore digest on compaction
+    skillsEnabled: true       # register wolf-security-audit + wolf-reframe skills
+    autoRescanMinutes: 0      # auto-rescan cached roots every N minutes (0 = off)
 ```
 
 A later layer can override the whole row by `id`, so deployments keep their own defaults.
+
+## Bundled skills
+
+Two skills register into the harness skill catalog (`skillsEnabled`):
+
+- **`wolf-security-audit`** — layered audit (dependencies → secrets → injection surfaces → authorization) ending in a severity-ranked report, with confirmed findings wired into `.wolf/buglog.json`.
+- **`wolf-reframe`** — the design brain: pick/migrate a UI framework from a 13-framework knowledge base, or audit/fix existing UI against the anti-generic mandate (distinctiveness is an acceptance criterion; the recognizable AI-generated look is a failure state).
+
+## Standalone CLI
+
+The package ships a `wolf` binary that works without a running harness (it reuses the library directly):
+
+```sh
+wolf init [dir]             # initialize .wolf/ brain
+wolf scan [dir]             # rescan + pin state + render anatomy.md + inject AGENTS.md
+wolf scan --check [dir]     # verify index vs filesystem (CI-friendly; exit 1 on drift)
+wolf status [dir]           # brain health
+wolf report [dir]           # token ledger summary
+```
 
 ## Development
 
