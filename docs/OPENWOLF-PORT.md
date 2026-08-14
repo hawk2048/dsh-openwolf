@@ -86,10 +86,12 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 - ✅ Description extractor (B4): `src/description.ts` — language-aware summaries (exports, HTTP routes, zod schemas, python docstrings, go handlers, JSON metadata) with first-meaningful-line fallback, used for map entries and read hints
 - ✅ Tests: +8 description, +3 brain (lock/steal/upsert); published as `dsh-openwolf@0.3.0-rc.1` (npm tag `rc`)
 
-### P2 — Anatomy engine parity (v0.4)
-- lezer symbol backend + >500-token threshold + line ranges + per-symbol token estimate (B3)
-- `wolf_scan --check`-style integrity verify; post-write incremental updates (B7 complete)
-- anatomy.md render parity (B2)
+### P2 — Anatomy engine parity (v0.4) ✅ SHIPPED (0.4.0-rc.1)
+- ✅ Symbol backend (B3): `symbolBackend: auto|regex|lezer` — pure-JS lezer grammars (TS/JS, Python, Go, Rust, Java) extract top-level declarations with exact line spans + per-symbol token estimates; regex fallback; backend parity tests
+- ✅ anatomy.md (B2): `.wolf/anatomy.md` human-readable index view synced on rescan; content-hash detection absorbs manual edits additively
+- ✅ Integrity check: `wolf_scan` (read-only, CI-friendly) — cached index vs filesystem size/mtime drift + git HEAD pin
+- ✅ Post-write incremental updates (B7): single-file re-analysis now keeps per-directory aggregates in sync
+- ✅ Tests: +lezer golden/parity, +anatomy render/absorb, +dirs aggregates, +wolf_scan drift (54 unit + 36 integration); published as `dsh-openwolf@0.4.0-rc.1` and promoted to `latest`
 
 ### P3 — Platform (v0.5+)
 - skills: `wolf/security-audit`, `wolf/reframe` (G1/G2) as DSH skills
