@@ -1,0 +1,39 @@
+# The dsh-openwolf bundle patch. Applied after @deepseek-ai/dsh-base and before
+# the profile's own cordis.patch.yml, so every row here can be overridden by id
+# in a later layer.
+#
+# One host-plane row: the service + the three model tools (wolf_map, wolf_file,
+# wolf_refresh). Tools register on the host `tools` registry, so every agent
+# sees them; each call resolves the session workspace from the agent header.
+- insert:
+    - id: openwolf
+      name: dsh-openwolf
+      inject: [tools]
+      config:
+        maxMapBytes: 16384
+        maxFileBytes: 65536
+        maxFiles: 4000
+        watch: true
+        injectAgentsMd: true
+        agentsMdFile: AGENTS.md
+        useGitignore: true
+        ignore:
+          - node_modules
+          - .git
+          - dist
+          - build
+          - coverage
+          - .venv
+          - __pycache__
+          - .next
+          - .cache
+          - .turbo
+          - .idea
+          - .vscode
+          - target
+          - out
+          - '*.log'
+        hidden: false
+        symbols: true
+        debounceMs: 1000
+        sortBy: path
