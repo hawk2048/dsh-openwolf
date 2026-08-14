@@ -93,9 +93,14 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 - ✅ Post-write incremental updates (B7): single-file re-analysis now keeps per-directory aggregates in sync
 - ✅ Tests: +lezer golden/parity, +anatomy render/absorb, +dirs aggregates, +wolf_scan drift (54 unit + 36 integration); published as `dsh-openwolf@0.4.0-rc.1` and promoted to `latest`
 
-### P3 — Platform (v0.5+)
-- skills: `wolf/security-audit`, `wolf/reframe` (G1/G2) as DSH skills
-- dashboard as a DSH **client plugin** (H1) reusing DSH web slots; daemon/cron via `ctx.jobs` + `dsh-schedule` (H2); CLI via `dsh-openwolf/bin` (H3)
+### P3 — Platform (v0.5+) — phase 1 ✅ SHIPPED (0.5.0-rc.1)
+- ✅ Skills (G1/G2): `wolf-security-audit` (4-layer audit → severity report → buglog) and `wolf-reframe` (13-framework KB + anti-generic mandate) registered into `ctx.skills`
+- ✅ CLI (H3): `wolf` binary — init/scan/`scan --check`/status/report, standalone (reuses the library); `--check` persists a file manifest and exits 1 on drift
+- ✅ Auto-rescan (H2-lite): `autoRescanMinutes` refreshes cached roots on an unref'd timer
+- ⏳ Dashboard (H1) — deferred to P3 phase 2 (DSH client plugin over web slots)
+
+### P3 phase 2 (dashboard) — proposed scope
+- DSH client plugin (`dsh-openwolf/client`) registering web slots: token usage panel (ledger + tokenMeter), context health (scan freshness/git HEAD/digest budget), anatomy browser with per-file symbols, session handoff (STATUS), cron control
 
 ## 4. Research items before implementation
 
