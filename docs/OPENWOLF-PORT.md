@@ -79,11 +79,12 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 - ✅ New tools: `wolf_init`, `wolf_status`, `wolf_learn`, `wolf_bug`, `wolf_report`
 - ✅ Tests: 32 unit + 31 integration assertions; profile boot verified; published as `dsh-openwolf@0.2.0-rc.1` (npm tag `rc`)
 
-### P1 — Memory & measurement (v0.3)
-- memory.md action log, buglog + `wolf_bug search`, cerebrum learning reminders (A4-A7)
-- token-ledger + `wolf_report` using DSH `ctx.tokenMeter` real numbers (C1-C3)
-- secret denylist (B8), cross-process lock + content-hash absorb (B1)
-- description-extractor port (B4)
+### P1 — Memory & measurement (v0.3) ✅ SHIPPED (0.3.0-rc.1)
+- ✅ Session housekeeping reminders (A5/A7): sparse cerebrum / empty buglog nudges via `agent.inject()` on session start
+- ✅ Token ledger measured (C1-C3): `turn/end` measures via `ctx.tokenMeter` and upserts by session id; `wolf_report` surfaces measured totals
+- ✅ Cross-process lock (B1): `.wolf/.lock` exclusive-create + stale steal around all brain read-modify-write ops
+- ✅ Description extractor (B4): `src/description.ts` — language-aware summaries (exports, HTTP routes, zod schemas, python docstrings, go handlers, JSON metadata) with first-meaningful-line fallback, used for map entries and read hints
+- ✅ Tests: +8 description, +3 brain (lock/steal/upsert); published as `dsh-openwolf@0.3.0-rc.1` (npm tag `rc`)
 
 ### P2 — Anatomy engine parity (v0.4)
 - lezer symbol backend + >500-token threshold + line ranges + per-symbol token estimate (B3)
