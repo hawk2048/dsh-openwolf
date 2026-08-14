@@ -70,12 +70,14 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 
 ## 3. Phased port plan
 
-### P0 — Context core (v0.2, smallest useful replica of OpenWolf's value)
-- `.wolf/` bootstrap (`wolf_init`) + `config.json` equivalent (per-agent budget, rescan interval)
-- **Session digest** (A1): STATUS 🚀 + Do-Not-Repeat + recent bugs + anatomy pointer, budget-capped, injected at session start through the agent-instructions seam; **staleness warning** (A3)
-- **Read interception** (B5/B6): via `tools/pre-execute` on `read`/`read_file`: repeated-read warning, anatomy hint + symbol line-range hints, staleness-suppressed
-- **Write interception** (B7): `tools/post-execute` on write/edit → index update + memory.md log
-- Compaction survival (A2) if a DSH seam exists; otherwise document the gap
+### P0 — Context core (v0.2) ✅ SHIPPED (0.2.0-rc.1)
+- ✅ `.wolf/` bootstrap (`wolf_init`) + `config.json` equivalent (per-agent budget, rescan interval) — `src/brain.ts`
+- ✅ **Session digest** (A1): STATUS 🚀 + Do-Not-Repeat + recent bugs + anatomy pointer, budget-capped, injected via `agent.inject()` on `agent/session-start` (startup/clear); **staleness warning** (A3, git-HEAD pin + age) — `src/digest.ts`
+- ✅ **Read interception** (B5/B6): `tools/post-execute` on `read` → repeated-read warning, anatomy hint + symbol line-range hints, staleness-suppressed, secret-excluded
+- ✅ **Write interception** (B7): `tools/post-execute` on `write`/`edit` → memory.md log + session tracking + single-file re-analysis
+- ✅ Compaction survival (A2): `compaction/start` snapshot + `agent/session-start(source: 'compact')` restore digest (the DSH seam exists — durable `compaction/start`/`compaction/end` session events)
+- ✅ New tools: `wolf_init`, `wolf_status`, `wolf_learn`, `wolf_bug`, `wolf_report`
+- ✅ Tests: 32 unit + 31 integration assertions; profile boot verified; published as `dsh-openwolf@0.2.0-rc.1` (npm tag `rc`)
 
 ### P1 — Memory & measurement (v0.3)
 - memory.md action log, buglog + `wolf_bug search`, cerebrum learning reminders (A4-A7)
