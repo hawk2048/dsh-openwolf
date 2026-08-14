@@ -11,6 +11,7 @@ import { sep } from 'node:path'
 import { isIgnored, loadRootGitignore, compilePatterns, type IgnoreContext } from './ignore.ts'
 import { detectLang, extractSymbolHits, firstMeaningfulLine, isBinary } from './symbols.ts'
 import { describeFile } from './description.ts'
+import { extractSymbolsLezer, lezerAvailableFor } from './lezer.ts'
 import type { CodeMap, DirEntry, FileDigest, FileEntry, ScanOptions, SymbolLine } from './types.ts'
 
 /** POSIX-ify a relative path. */
@@ -32,16 +33,47 @@ export async function buildIgnoreContext(root: string, opts: ScanOptions): Promi
   }
 }
 
+/** Enrich regex hits with end lines + per-symbol token estimates. */
+function enrichHits(text: string, hits: Array<{ name: string; line: number }>, totalLines: number): SymbolLine[] {
+  const lines = text.split(/\r?\n/)
+  return hits.map((h, i) => {
+    const next = hits[i + 1]
+    const endLine = Math.min(next?.line ?? totalLines, totalLines)
+    const body = lines.slice(Math.max(0, h.line - 1), endLine).join('\n')
+    return {
+      name: h.name,
+      line: h.line,
+      endLine,
+      tokens: Math.max(1, Math.ceil(body.length / 4)),
+    }
+  })
+}
+
+/** Extract symbol hits via the configured backend. */
+async function extractHits(filePath: string, text: string, opts: ScanOptions): Promise<SymbolLine[]> {
+  if (!opts.symbols) return []
+  const lang = detectLang(filePath)
+  const backend = opts.symbolBackend ?? 'auto'
+  if (backend === 'lezer' || (backend === 'auto' && lezerAvailableFor(filePath))) {
+    const lezerHits = await extractSymbolsLezer(text, filePath, MAX_SYMBOLS_PER_FILE)
+    if (lezerHits.length > 0) {
+      return lezerHits.map((h) => ({ name: h.name, line: h.line, endLine: h.endLine, tokens: h.tokens }))
+    }
+    // A grammar exists but found nothing (unsupported constructs): fall back.
+  }
+  const totalLines = text.split(/\r?\n/).length - 1
+  return enrichHits(text, extractSymbolHits(text, lang, MAX_SYMBOLS_PER_FILE), totalLines)
+}
+
 /** Analyze one file's content into a {@link FileEntry}. */
-function analyzeText(filePath: string, text: string, mtimeMs: number, opts: ScanOptions): FileEntry {
+async function analyzeText(filePath: string, text: string, mtimeMs: number, opts: ScanOptions): Promise<FileEntry> {
   const lang = detectLang(filePath)
   const lines = text.split(/\r?\n/).length - 1
   // Language-aware description (exports/routes/schema/docstring) with a
   // first-meaningful-line fallback — richer map entries and read hints.
   const summary = describeFile(text, filePath, SUMMARY_MAX_LEN)
-  const hits = opts.symbols ? extractSymbolHits(text, lang, MAX_SYMBOLS_PER_FILE) : []
-  const symbols = hits.map((h) => h.name)
-  const symbolLines: SymbolLine[] = hits.map((h) => ({ name: h.name, line: h.line }))
+  const symbolLines = (await extractHits(filePath, text, opts)).sort((a, b) => a.line - b.line)
+  const symbols = symbolLines.map((h) => h.name)
   return {
     path: filePath,
     size: text.length,
@@ -83,22 +115,11 @@ export async function scanCodebase(root: string, opts: ScanOptions): Promise<Cod
   const started = Date.now()
   const ignore = await buildIgnoreContext(root, opts)
   const files: FileEntry[] = []
-  const dirAgg: Map<string, { files: number; lines: number; bytes: number }> = new Map()
   let totalLines = 0
   let totalBytes = 0
   let skippedFiles = 0
   let truncated = false
   let scanned = 0
-
-  const touchDir = (dirPath: string, entry: { lines: number; bytes: number }) => {
-    const agg = dirAgg.get(dirPath) ?? { files: 0, lines: 0, bytes: 0 }
-    agg.files += 1
-    agg.lines += entry.lines
-    agg.bytes += entry.bytes
-    dirAgg.set(dirPath, agg)
-    const parent = dirPath.includes('/') ? dirPath.slice(0, dirPath.lastIndexOf('/')) : ''
-    if (parent !== dirPath) touchDir(parent, entry)
-  }
 
   const stack: Array<{ dirAbs: string; dirRel: string }> = [{ dirAbs: root, dirRel: '' }]
   while (stack.length > 0) {
@@ -143,7 +164,6 @@ export async function scanCodebase(root: string, opts: ScanOptions): Promise<Cod
         files.push(fileEntry)
         totalLines += fileEntry.lines
         totalBytes += fileEntry.size
-        touchDir(dirRel, { lines: fileEntry.lines, bytes: fileEntry.size })
       }
     }
   }
@@ -154,9 +174,7 @@ export async function scanCodebase(root: string, opts: ScanOptions): Promise<Cod
     files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
   }
 
-  const dirs: DirEntry[] = [...dirAgg.entries()]
-    .map(([path, agg]) => ({ path, files: agg.files, lines: agg.lines, bytes: agg.bytes }))
-    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+  const dirs = dirsFromFiles(files)
 
   return {
     root,
@@ -171,6 +189,27 @@ export async function scanCodebase(root: string, opts: ScanOptions): Promise<Cod
     truncated,
     elapsedMs: Date.now() - started,
   }
+}
+
+/** Compute per-directory aggregates from a file list (post-write sync). */
+export function dirsFromFiles(files: FileEntry[]): DirEntry[] {
+  const dirAgg = new Map<string, { files: number; lines: number; bytes: number }>()
+  const touchDir = (dirPath: string, entry: { lines: number; bytes: number }) => {
+    const agg = dirAgg.get(dirPath) ?? { files: 0, lines: 0, bytes: 0 }
+    agg.files += 1
+    agg.lines += entry.lines
+    agg.bytes += entry.bytes
+    dirAgg.set(dirPath, agg)
+    const parent = dirPath.includes('/') ? dirPath.slice(0, dirPath.lastIndexOf('/')) : ''
+    if (parent !== dirPath) touchDir(parent, entry)
+  }
+  for (const f of files) {
+    const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
+    touchDir(dir, { lines: f.lines, bytes: f.size })
+  }
+  return [...dirAgg.entries()]
+    .map(([path, agg]) => ({ path, files: agg.files, lines: agg.lines, bytes: agg.bytes }))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 }
 
 /**

@@ -27,11 +27,11 @@ import { defineTool, type PostToolDecision } from '@deepseek-ai/dsh-tools'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Schema from '@deepseek-ai/schemastery'
 import { watch, type FSWatcher } from 'chokidar'
-import { scanCodebase, summarizeFile, analyzeFile } from './scanner.ts'
+import { scanCodebase, summarizeFile, analyzeFile, dirsFromFiles } from './scanner.ts'
 import { injectBlock, renderMap } from './render.ts'
 import { WolfBrain, isSensitiveFile } from './brain.ts'
 import { buildSessionDigestWithWarning, buildSessionDigest, currentGitHead, anatomyStaleReason } from './digest.ts'
-import type { CodeMap, FileEntry, ScanOptions } from './types.ts'
+import type { CodeMap, FileEntry, ScanOptions, SymbolBackend } from './types.ts'
 
 /** Plugin display name used in diagnostics. */
 export const name = 'dsh-openwolf'
@@ -61,6 +61,8 @@ export interface Config {
   hidden: boolean
   /** Extract top-level symbols for map entries and digests. */
   symbols: boolean
+  /** Symbol backend: `auto` (lezer when available) | `regex` | `lezer`. */
+  symbolBackend: SymbolBackend
   /** Debounce (ms) for watcher-triggered rescans. */
   debounceMs: number
   /** Sort map files by `path` (ascending) or `size` (descending). */
@@ -100,6 +102,7 @@ export const Config: Schema<Config> = Schema.object({
   ]),
   hidden: Schema.boolean().default(false),
   symbols: Schema.boolean().default(true),
+  symbolBackend: Schema.union(['auto', 'regex', 'lezer']).default('auto'),
   debounceMs: Schema.number().min(0).max(60000).default(1000),
   sortBy: Schema.union(['path', 'size']).default('path'),
   brainEnabled: Schema.boolean().default(true),
@@ -119,6 +122,7 @@ function scanOptionsOf(config: Config): ScanOptions {
     maxFiles: config.maxFiles,
     maxFileBytes: config.maxFileBytes,
     symbols: config.symbols,
+    symbolBackend: config.symbolBackend,
     hidden: config.hidden,
     // The instruction file itself carries the managed map block; exclude it so
     // the map does not list (or recurse into) its own output.
@@ -180,6 +184,8 @@ export function apply(ctx: Context, config: Config) {
         total_files: map.totalFiles,
         total_lines: map.totalLines,
       })
+      // Keep the human-readable index view in sync (additive absorb on edits).
+      await brain.syncAnatomy(map)
     }
     let injected = false
     let agentsMd: string | null = null
@@ -223,7 +229,8 @@ export function apply(ctx: Context, config: Config) {
       if (idx !== -1) {
         const files = [...entry.map.files]
         files[idx] = updated
-        cache.set(root, { ...entry, map: { ...entry.map, files } })
+        // Keep per-directory aggregates in sync with the patched file list.
+        cache.set(root, { ...entry, map: { ...entry.map, files, dirs: dirsFromFiles(files) } })
       }
     } catch {
       // best-effort single-file refresh
@@ -389,7 +396,9 @@ export function apply(ctx: Context, config: Config) {
               const fresh = await fileIsFresh(root, entry)
               if (fresh) {
                 const top = entry.symbolLines.slice(0, 5)
-                const list = top.map((s) => `${s.name} at L${s.line}`).join('; ')
+                const list = top
+                  .map((s) => `${s.name} L${s.line}${s.endLine !== undefined && s.endLine !== s.line ? `-${s.endLine}` : ''}${s.tokens !== undefined ? ` ~${s.tokens} tok` : ''}`)
+                  .join('; ')
                 line += `\n   ↳ symbols: ${list}. Use read offset/limit starting at the relevant line to fetch just what you need.`
               } else {
                 line += '\n   ↳ file changed since index — run wolf_refresh before trusting this range.'
@@ -629,6 +638,80 @@ export function apply(ctx: Context, config: Config) {
         injected,
         agentsMd: agentsMd ?? undefined,
         injectedBytes,
+      }
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'wolf_scan',
+    description:
+      'Verify the cached code map against the filesystem (CI-friendly, read-only): reports files whose size or mtime changed since indexing and whether the pinned git HEAD moved. Run wolf_refresh to rebuild when it reports drift.',
+    parameters: {},
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          root: { type: 'string', required: true },
+          checked: { type: 'number', required: true },
+          fresh: { type: 'boolean', required: true },
+          drifted: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                path: { type: 'string', required: true },
+                sizeChanged: { type: 'boolean', required: true },
+                mtimeChanged: { type: 'boolean', required: true },
+              },
+            },
+            required: true,
+          },
+          gitHeadMoved: { type: 'boolean', required: true },
+          report: { type: 'string', required: true },
+        },
+      },
+      render: (_args, value) => [{ type: 'text', text: value.report }],
+    },
+    async execute(_args, exec) {
+      const root = resolveWorkspace(exec)
+      const entry = cache.get(root)
+      if (entry === undefined) {
+        throw new Error('no index cached for this workspace — run wolf_refresh first')
+      }
+      const brain = await brainOf(root)
+      const scanState = brain !== null ? await brain.readScanState() : {}
+      const drifted: Array<{ path: string; sizeChanged: boolean; mtimeChanged: boolean }> = []
+      for (const f of entry.map.files) {
+        try {
+          const { stat } = await import('node:fs/promises')
+          const st = await stat(`${root.replace(/[\\/]+$/, '')}/${f.path}`)
+          const sizeChanged = st.size !== f.size
+          const mtimeChanged = f.mtimeMs === undefined || Math.abs(st.mtimeMs - f.mtimeMs) >= 1
+          if (sizeChanged || mtimeChanged) drifted.push({ path: f.path, sizeChanged, mtimeChanged })
+        } catch {
+          drifted.push({ path: f.path, sizeChanged: true, mtimeChanged: true })
+        }
+      }
+      const head = await currentGitHead(root)
+      const gitHeadMoved = scanState.git_head !== undefined && head !== null && scanState.git_head !== head
+      const fresh = drifted.length === 0 && !gitHeadMoved
+      const lines = [
+        `checked ${entry.map.totalFiles} indexed files against ${root}`,
+        drifted.length > 0
+          ? `drifted: ${drifted.length} file(s) changed since indexing${drifted.slice(0, 8).map((d) => `\n  - ${d.path}${d.sizeChanged ? ' (size)' : ''}${d.mtimeChanged ? ' (mtime)' : ''}`).join('')}${drifted.length > 8 ? `\n  … ${drifted.length - 8} more` : ''}`
+          : 'no files changed since indexing',
+        gitHeadMoved ? '⚠ git HEAD moved since the last scan' : 'git HEAD matches the scan pin',
+        fresh ? 'INDEX FRESH' : 'run wolf_refresh to rebuild',
+      ]
+      return {
+        root,
+        checked: entry.map.totalFiles,
+        fresh,
+        drifted,
+        gitHeadMoved,
+        report: lines.join('\n'),
       }
     },
   }))

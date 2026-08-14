@@ -36,7 +36,14 @@ export interface FileEntry {
 export interface SymbolLine {
   name: string
   line: number
+  /** Last line of the declaration (offset/limit reads); lezer or enriched. */
+  endLine?: number
+  /** Estimated tokens of the declaration body. */
+  tokens?: number
 }
+
+/** Symbol extraction backend. */
+export type SymbolBackend = 'auto' | 'regex' | 'lezer'
 
 /** Aggregated counts for one directory. */
 export interface DirEntry {
@@ -104,6 +111,8 @@ export interface ScanOptions {
   maxFileBytes: number
   /** Extract top-level symbols. */
   symbols: boolean
+  /** Symbol backend: `auto` (lezer when available) | `regex` | `lezer`. */
+  symbolBackend: SymbolBackend
   /** Include dot-files and dot-directories (`.git` is always excluded). */
   hidden: boolean
   /** Extra ignore patterns (gitignore-lite syntax). */

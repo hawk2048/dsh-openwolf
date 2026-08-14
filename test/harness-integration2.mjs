@@ -113,6 +113,21 @@ ok(session.files_written.some((w) => w.file === 'src/new.ts'), 'session tracks w
 const secret = await call('read', { file_path: '.env' })
 ok(secret.isError !== true && (secret.additionalContexts ?? []).length === 0, 'secret reads carry no hints')
 
+// 10. wolf_scan verifies index freshness (CI-friendly, read-only).
+const scanFresh = await call('wolf_scan', {})
+ok(scanFresh.isError !== true && scanFresh.value?.fresh === true, 'wolf_scan reports fresh index')
+// Touch a file on disk → wolf_scan detects drift.
+await writeFile(join(fixture, 'src/index.ts'), 'export function changed() {}\n')
+const scanDrift = await call('wolf_scan', {})
+ok(scanDrift.isError !== true && scanDrift.value?.fresh === false, 'wolf_scan detects drift after a file change')
+ok(scanDrift.value?.drifted?.some((d) => d.path === 'src/index.ts'), 'drifted list names the changed file')
+
+// 11. anatomy.md is maintained after wolf_refresh.
+const refresh2 = await call('wolf_refresh', {})
+ok(refresh2.isError !== true, 'wolf_refresh for anatomy sync')
+const anatomy = await readFile(join(fixture, '.wolf/anatomy.md'), 'utf8')
+ok(anatomy.includes('# Anatomy') && anatomy.includes('Files:'), 'anatomy.md rendered')
+
 console.log(`\n${pass} integration assertions passed`)
 await rm(fixture, { recursive: true, force: true })
 process.exit(0)

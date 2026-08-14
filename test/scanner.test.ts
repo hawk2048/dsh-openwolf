@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { scanCodebase, summarizeFile, resolveInside } from '../src/scanner.ts'
+import { scanCodebase, summarizeFile, resolveInside, dirsFromFiles } from '../src/scanner.ts'
 import type { ScanOptions } from '../src/types.ts'
 
 const opts: ScanOptions = {
@@ -59,7 +59,9 @@ test('scanCodebase builds a compact map with ignores applied', async () => {
   const index = map.files.find((f) => f.path === 'src/index.ts')!
   assert.equal(index.lang, 'ts')
   assert.equal(index.lines, 5)
-  assert.deepEqual(index.symbols, ['createApp', 'Server', 'version'])
+  // auto backend resolves to lezer for ts: source order, with end lines.
+  assert.deepEqual(index.symbols, ['version', 'createApp', 'Server'])
+  assert.ok((index.symbolLines ?? []).every((s) => typeof s.endLine === 'number' && typeof s.tokens === 'number'))
   // Language-aware description: exports summary replaces the bare first line.
   assert.equal(index.summary, 'Exports version, createApp')
   const readme = map.files.find((f) => f.path === 'README.md')!
@@ -102,4 +104,19 @@ test('resolveInside contains paths', () => {
   assert.equal(resolveInside(root, 'a/../../x'), null)
   assert.equal(resolveInside(root, 'C:\\abs.ts'), null)
   assert.equal(resolveInside(root, '/abs.ts'), null)
+})
+
+test('dirsFromFiles aggregates per-directory counts (post-write sync)', () => {
+  const files = [
+    { path: 'src/a.ts', size: 10, lines: 5, symbols: [], summary: '', lang: 'ts', tokens: 3, skipped: false },
+    { path: 'src/deep/b.ts', size: 20, lines: 8, symbols: [], summary: '', lang: 'ts', tokens: 5, skipped: false },
+    { path: 'root.ts', size: 30, lines: 3, symbols: [], summary: '', lang: 'ts', tokens: 8, skipped: false },
+  ]
+  const dirs = dirsFromFiles(files)
+  const byPath = new Map(dirs.map((d) => [d.path, d]))
+  assert.equal(byPath.get('src')?.files, 2)
+  assert.equal(byPath.get('src')?.lines, 13)
+  assert.equal(byPath.get('src')?.bytes, 30)
+  assert.equal(byPath.get('src/deep')?.files, 1)
+  assert.equal(byPath.get('')?.files, 3)
 })

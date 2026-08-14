@@ -44,6 +44,7 @@ Eight native tools appear in every session:
 | `wolf_map` | The compact code map for the current workspace (optionally force a rescan with `refresh`). |
 | `wolf_file` | A bounded digest of one file: language, size, line count, token estimate, top symbols, and a preview — instead of reading the whole file. |
 | `wolf_refresh` | Force a rescan, pin the scan state (git HEAD + timestamp), and re-inject the map into `AGENTS.md`. |
+| `wolf_scan` | CI-friendly integrity check: cached index vs filesystem (size/mtime drift) + git HEAD pin (read-only). |
 | `wolf_init` | Initialize the `.wolf/` brain directory (idempotent). |
 | `wolf_status` | Read or update `STATUS.md`; its `## 🚀` section feeds the session digest. |
 | `wolf_learn` | Record a preference / convention / Do-Not-Repeat entry in `cerebrum.md`. |
@@ -80,9 +81,12 @@ When `brainEnabled` is on, each workspace gets a `.wolf/` directory:
 ```
 
 - **Session digest** — on `agent/session-start`, a budget-capped digest is injected via `agent.inject()`: STATUS 🚀 next phase → Do-Not-Repeat (last 10) → recent 5 bugs → anatomy pointer. A **staleness warning** is prepended when the pinned git HEAD moved or the last scan is older than `rescanIntervalHours`. Housekeeping reminders nudge the model to keep the brain fed (sparse cerebrum → `wolf_learn`; empty buglog → `wolf_bug`).
-- **Read interception** — on `tools/post-execute` of `read`: an anatomy hint (`path — summary (~tokens)`), and for files above `symbolThresholdTokens`, the top symbols with line numbers for `offset`/`limit` reads. Hints are suppressed when the file changed since indexing. Re-reading the same file in one session warns with the earlier token cost. Summaries are **language-aware** (`src/description.ts`): exports summaries, HTTP route detection, zod-schema and JSON-metadata recognition, module docstrings.
+- **Read interception** — on `tools/post-execute` of `read`: an anatomy hint (`path — summary (~tokens)`), and for files above `symbolThresholdTokens`, the top symbols with **line ranges and per-symbol token estimates** (`main L1-4 ~11 tok`) for `offset`/`limit` reads. Hints are suppressed when the file changed since indexing. Re-reading the same file in one session warns with the earlier token cost. Summaries are **language-aware** (`src/description.ts`): exports summaries, HTTP route detection, zod-schema and JSON-metadata recognition, module docstrings.
+- **Symbol backends** — `symbolBackend: auto | regex | lezer`. `lezer` (default in `auto` when a grammar exists) parses with pure-JS CodeMirror grammars (TypeScript/JS, Python, Go, Rust, Java) and extracts top-level declarations with exact line spans and token costs; `regex` is the dependency-free heuristic fallback.
 - **Write interception** — `write`/`edit` results are logged to `memory.md`, tracked in session state, and the single changed file is re-analyzed into the cached map.
 - **Compaction survival** — a `compaction/start` snapshot plus a `session-start(source: compact)` restore digest listing files already modified this session.
+- **anatomy.md** — `.wolf/anatomy.md` is a human-readable index view kept in sync on every rescan; manual edits are detected by content hash and **absorbed additively** (never clobbered).
+- **Integrity checks** — `wolf_scan` compares the cached index against the filesystem (size/mtime) and the pinned git HEAD, reporting drift for CI or pre-session verification.
 - **Token ledger (measured)** — on every `turn/end` the harness token meter (`ctx.tokenMeter`) measures the session and upserts it into `token-ledger.json` by session id; `wolf_report` shows measured totals.
 - **Cross-process lock** — `.wolf/.lock` (exclusive-create + stale-lock steal) serializes read-modify-write updates so concurrent hook fires never lose rows.
 - **Secret hygiene** — `.env`, `.npmrc`, keys, keystores and friends never enter hints or logs.
@@ -104,6 +108,7 @@ All options are schema-validated at load; omitted fields use defaults. Override 
     ignore: [node_modules, .git, dist, build, coverage, .venv, __pycache__, .next, .cache, .turbo, .idea, .vscode, target, out, "*.log"]
     hidden: false             # include dotfiles/dot-directories (.git stays excluded)
     symbols: true             # extract top-level symbols
+    symbolBackend: auto       # auto | regex | lezer (CST parsing)
     debounceMs: 1000          # watcher debounce for rescans
     sortBy: path              # path | size
     brainEnabled: true        # the .wolf/ brain (digest, memory, buglog, ledger)
@@ -144,6 +149,7 @@ dsh --profile <name> --dump-config | grep -A2 openwolf
 - **Brain** (`src/brain.ts`): the durable `.wolf/` store — config, STATUS, cerebrum, memory, buglog, token ledger, session/scan state — with atomic writes, a cross-process lock (`.wolf/.lock`), and a secret denylist.
 - **Digest** (`src/digest.ts`): budget-capped session digest construction and git-HEAD staleness detection.
 - **Description** (`src/description.ts`): language-aware one-line file descriptions (exports summaries, HTTP routes, schemas, docstrings, JSON metadata).
+- **Symbols** (`src/lezer.ts` + `src/symbols.ts`): optional lezer CST extraction of top-level declarations (name, start/end lines, per-symbol token estimate) with regex fallback and backend parity tests.
 - **Plugin** (`src/index.ts`): caches maps per workspace root, lazily starts a debounced chokidar watcher, resolves the workspace from the calling agent's session (`agent.session.header.cwd`), injects the session digest on `agent/session-start`, intercepts `read`/`write`/`edit` on `tools/post-execute` (attaching model-facing hints via `additionalContexts`), snapshots on `compaction/start`, and registers eight tools on `ctx.tools`. Every registration is an effect: unloading the plugin (config edit, HMR, restart) unwinds watchers, timers, and tools.
 
 The scanner/analyzer is dependency-free and exported for reuse; `scanCodebase`, `summarizeFile`, `renderMap`, `injectBlock`, `WolfBrain`, and the digest builders are public API.
@@ -154,7 +160,7 @@ The scanner/analyzer is dependency-free and exported for reuse; `scanCodebase`, 
 
 #### What the model sees
 
-Eight tool schemas (`wolf_map`, `wolf_file`, `wolf_refresh`, `wolf_init`, `wolf_status`, `wolf_learn`, `wolf_bug`, `wolf_report`) with the descriptions above, plus — when `injectAgentsMd` is enabled and the session workspace has an `AGENTS.md` — a managed `# Code Map` block preloaded by the harness's `agent-instructions` plugin (capped at `maxMapBytes`, replaced only when the map changes). When `digestEnabled`, `agent/session-start` injects a budget-capped session digest (STATUS 🚀 / Do-Not-Repeat / recent bugs / anatomy pointer, plus a staleness warning when the pinned git HEAD moved or the scan is older than `rescanIntervalHours`). When `interceptReads`, `read` results carry anatomy hints (description + token estimate, and symbol line ranges for files above `symbolThresholdTokens`) and repeated-read warnings via `additionalContexts`.
+Eight tool schemas (`wolf_map`, `wolf_file`, `wolf_refresh`, `wolf_scan`, `wolf_init`, `wolf_status`, `wolf_learn`, `wolf_bug`, `wolf_report`) with the descriptions above, plus — when `injectAgentsMd` is enabled and the session workspace has an `AGENTS.md` — a managed `# Code Map` block preloaded by the harness's `agent-instructions` plugin (capped at `maxMapBytes`, replaced only when the map changes). When `digestEnabled`, `agent/session-start` injects a budget-capped session digest (STATUS 🚀 / Do-Not-Repeat / recent bugs / anatomy pointer, plus a staleness warning when the pinned git HEAD moved or the scan is older than `rescanIntervalHours`). When `interceptReads`, `read` results carry anatomy hints (description + token estimate, and symbol line ranges with per-symbol token estimates for files above `symbolThresholdTokens`) and repeated-read warnings via `additionalContexts`.
 
 #### Token effect
 
@@ -166,7 +172,7 @@ Prefix-stable while the map and digest are unchanged: identical `AGENTS.md` cont
 
 ## Known Limitations and Deferred Work
 
-- **Heuristic symbols** — symbol extraction is regex-based per language family, not a real parser; nested or unusual declarations may be missed. A tree-sitter backend is a v0.3 direction.
+- **Heuristic symbols (fallback)** — the regex backend is per-language heuristics; the lezer backend covers TS/JS, Python, Go, Rust, Java. Languages without a lezer grammar fall back to regex.
 - **Root-level `.gitignore` only** — nested `.gitignore` files and `git check-ignore` exactness (e.g. `!` re-inclusion inside pruned directories) are not supported yet.
 - **Single instruction file** — the managed block lives in one file (`agentsMdFile`); multiple instruction files are not maintained simultaneously.
 - **No service export** — tools are registered from the plugin closure; the indexer and brain are exported as library functions, but there is no `ctx.openwolf` service for other plugins to consume. That is the v0.3 seam.

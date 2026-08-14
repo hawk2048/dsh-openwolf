@@ -1,6 +1,6 @@
 {
     "name":  "dsh-openwolf",
-    "version":  "0.3.0-rc.2",
+    "version":  "0.4.0-rc.1",
     "description":  "A compact code-map \u0027second brain\u0027 for DeepSeek Harness: pre-indexed project maps, per-file digests, session digests, read/write interception, and AGENTS.md injection so the agent stops re-reading whole files.",
     "type":  "module",
     "main":  "lib/index.js",
@@ -47,6 +47,11 @@
     "homepage":  "https://github.com/hawk2048/dsh-openwolf#readme",
     "dependencies":  {
                          "@deepseek-ai/schemastery":  "^3.18.1",
+                         "@lezer/go":  "^1.0.1",
+                         "@lezer/java":  "^1.1.3",
+                         "@lezer/javascript":  "^1.5.4",
+                         "@lezer/python":  "^1.1.19",
+                         "@lezer/rust":  "^1.0.2",
                          "chokidar":  "^4.0.3"
                      },
     "peerDependencies":  {

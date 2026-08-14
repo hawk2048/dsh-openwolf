@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { WolfBrain, isSensitiveFile, estimateTokens, DEFAULT_CONFIG } from '../src/brain.ts'
@@ -140,4 +140,50 @@ test('withLock steals a stale lock', async () => {
   // Lock released afterwards.
   await assert.rejects(() => b2.withLock(() => Promise.reject(new Error('x'))), /x/)
   await rm(lockPath, { recursive: true, force: true })
+})
+
+test('renderAnatomy produces the human-readable index view', () => {
+  const map = {
+    root, scannedAt: Date.now(), version: 1,
+    totalFiles: 1, totalLines: 3, totalBytes: 30, skippedFiles: 0, truncated: false, elapsedMs: 1,
+    files: [{
+      path: 'src/a.ts', size: 30, lines: 3, symbols: ['main'], lang: 'ts', tokens: 8,
+      symbolLines: [{ name: 'main', line: 1, endLine: 3, tokens: 8 }],
+      summary: 'Exports main', mtimeMs: 0, skipped: false,
+    }],
+    dirs: [{ path: 'src', files: 1, lines: 3, bytes: 30 }],
+  }
+  const md = brain.renderAnatomy(map)
+  assert.match(md, /# Anatomy/)
+  assert.match(md, /Files: 1 tracked/)
+  assert.match(md, /`src\/a\.ts` \(~8 tok\) — Exports main/)
+  assert.match(md, /main L1-3 ~8 tok/)
+})
+
+test('syncAnatomy writes once, idempotent, and absorbs manual edits', async () => {
+  const map = {
+    root, scannedAt: Date.now(), version: 2,
+    totalFiles: 1, totalLines: 1, totalBytes: 10, skippedFiles: 0, truncated: false, elapsedMs: 1,
+    files: [{
+      path: 'x.ts', size: 10, lines: 1, symbols: ['x'], lang: 'ts', tokens: 3,
+      symbolLines: [{ name: 'x', line: 1, endLine: 1, tokens: 3 }],
+      summary: 'Exports x', mtimeMs: 0, skipped: false,
+    }],
+    dirs: [],
+  }
+  const first = await brain.syncAnatomy(map)
+  assert.equal(first.changed, true)
+  assert.equal(first.absorbed, false)
+  // Same map → identical render → no rewrite (idempotent).
+  const second = await brain.syncAnatomy(map)
+  assert.equal(second.changed, false, 'identical render is a no-op')
+  // Human edit: append a note, then resync → absorb additively.
+  const anatomyPath = join(root, '.wolf/anatomy.md')
+  const text = await readFile(anatomyPath, 'utf8')
+  await writeFile(anatomyPath, `${text}\n## Human note\n\nkeep this\n`, 'utf8')
+  const third = await brain.syncAnatomy({ ...map, scannedAt: Date.now() + 2 })
+  assert.equal(third.absorbed, true)
+  const final = await readFile(anatomyPath, 'utf8')
+  assert.ok(final.includes('keep this'), 'human edit preserved')
+  assert.ok(final.includes('Auto-generated index (updated)'), 'fresh index appended')
 })
