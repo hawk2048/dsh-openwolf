@@ -1,5 +1,7 @@
 # dsh-openwolf
 
+English | [中文](README.zh.md)
+
 A compact code-map **"second brain"** for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It pre-indexes your workspace into a small, dense map — file tree, per-file one-line summaries, and top symbols — injects it into `AGENTS.md` so every session starts with the map, and gives the model three tools (`wolf_map`, `wolf_file`, `wolf_refresh`) so it stops re-reading whole files.
 
 Inspired by the token-saving idea behind [OpenWolf for Claude Code](https://github.com/cytostack/openwolf) ("sharper context, fewer tokens"), implemented from scratch as a native DSH plugin — no MCP server, no external CLI, no build step for users.
