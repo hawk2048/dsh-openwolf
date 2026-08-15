@@ -22,6 +22,7 @@
 <p align="center">
   <a href="#快速开始"><b>快速开始</b></a> &nbsp;&middot;&nbsp;
   <a href="#它会创建什么"><b>它会创建什么</b></a> &nbsp;&middot;&nbsp;
+  <a href="#初始化与保持新鲜"><b>初始化</b></a> &nbsp;&middot;&nbsp;
   <a href="#工作原理"><b>工作原理</b></a> &nbsp;&middot;&nbsp;
   <a href="#token-智能"><b>Token 智能</b></a> &nbsp;&middot;&nbsp;
   <a href="#仪表盘"><b>仪表盘</b></a> &nbsp;&middot;&nbsp;
@@ -76,19 +77,14 @@ dsh web                                      # 重启（或重启 GUI）
 agent 会替你执行 `dsh plugin` 命令并提示何时重启。Web GUI 或 `headless`
 profile 都能这么装。
 
-从 npm 安装无需授权。从本地 checkout 或 git URL 安装拉取的是源码，首次
-`add` 会失败，需要先在 profile 的 `pnpm-workspace.yaml` 里授权构建：
-
-```yaml
-allowBuilds:
-  dsh-openwolf: true
-```
-
-然后重新执行 `add`。`wolf` CLI 在包装好后也可独立使用：
+`wolf` CLI 在包装好后也可独立使用（见[命令](#命令)）：
 
 ```sh
 npx wolf init . && npx wolf scan .
 ```
+
+从 git URL 或本地 checkout 安装需要额外的构建授权——见
+[从源码安装](docs/INSTALL-FROM-SOURCE.md)。
 
 ## 它会创建什么
 
@@ -106,6 +102,35 @@ npx wolf init . && npx wolf scan .
 | `hooks/` | 会话状态、扫描状态（git HEAD 钉住）、压缩前快照 |
 | `config.json` | 配置，包括会话摘要预算 |
 | `OPENWOLF.md` | agent 遵循的操作协议 |
+
+## 初始化与保持新鲜
+
+**无需任何手动初始化**——插件在工作区的首次使用时惰性初始化大脑，之后自动
+重扫：
+
+- **首次接触**：第一次调用 `wolf_*` 工具（或第一个带 `injectAgentsMd` 的
+  会话）即创建 `.wolf/`、扫描一次工作区、把地图注入 `AGENTS.md`。不需要
+  单独执行 init。
+- **自动刷新**：防抖 watcher 在文件变更时重扫；`write`/`edit` 结果立即
+  重分析被改文件，地图和 `anatomy.md` 随你的工作保持新鲜。
+- **会话开始摘要**：每个新会话注入预算封顶的摘要（STATUS 🚀 / Do-Not-Repeat /
+  最近 bugs / anatomy 指针），扫描过旧或 git HEAD 移动时给出陈旧警告。
+
+想要显式控制时，一切都是一条命令（会话内也有对应工具）：
+
+| 你想… | 命令（CLI） | 工具（会话内） |
+|---|---|---|
+| 立刻从磁盘重建整个索引 | `wolf scan` | `wolf_refresh` |
+| 校验索引与文件系统一致（CI 友好） | `wolf scan --check` | `wolf_scan` |
+| 手动初始化 `.wolf/`（幂等，很少需要） | `wolf init` | `wolf_init` |
+| 读写会话交接文档 | `wolf status` | `wolf_status` |
+| 更新所有已注册项目（先备份） | `wolf update` | — |
+| 从时间戳备份回滚 `.wolf/` | `wolf restore` | — |
+| 定时无人值守重扫（零 token） | `wolf cron add … scan` | `wolf_schedule` |
+
+> **提示**：这些基本都不需要——插件的职责就是让大脑自我维护。只有当你
+> 在 harness 之外改了大量文件（例如一次大 `git pull`）想立刻重建地图时，
+> 才需要跑 `wolf scan`。
 
 ## 工作原理
 
@@ -247,24 +272,47 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 
 ## 命令
 
-```
-wolf init [dir]              初始化 .wolf/（幂等）
-wolf scan [dir]              重建项目索引（渲染 anatomy.md、注入 AGENTS.md）
-wolf scan --check [dir]      校验索引与文件系统一致（CI 友好；漂移退出码 1）
-wolf status [dir]            大脑健康：配置、扫描状态、账本
-wolf report [dir]            token 报告：实测 vs 估算
-wolf dashboard [dir]         打开 Web 仪表盘（--port / --token / --token-file）
-wolf daemon start|stop [dir] 后台守护：仪表盘 + cron 调度
-wolf cron add|list|run|remove  定时零 token 任务
-wolf bug search <term>       搜索 bug 记忆
-wolf register|unregister [dir]  工作区注册表（供 `update` 用）
-wolf update                  更新所有注册项目（带备份）
-wolf backups [dir] / wolf restore [dir] [tag]  从备份回滚 .wolf/
-```
+所有命令都接受可选目录参数（默认当前工作目录）。按使用场景分组：
+
+**大脑生命周期**
+
+| 命令 | 作用 | 什么时候用 |
+|---|---|---|
+| `wolf init [dir]` | 创建 `.wolf/`（幂等） | 通常不需要——大脑首次使用时自动初始化 |
+| `wolf scan [dir]` | 重建项目索引、渲染 `anatomy.md`、注入 `AGENTS.md` | 在 harness 之外做了大改动（如 `git pull`）想立刻重建地图 |
+| `wolf scan --check [dir]` | 校验索引与文件系统一致（size/mtime + git HEAD） | CI 或会话前校验；漂移退出码 1 |
+| `wolf status [dir]` | 大脑健康：配置、扫描状态、账本、memory/buglog 计数 | "我的大脑健康吗？" |
+| `wolf report [dir]` | token 账本摘要：各会话实测 vs 估算 | 弄清楚 token 花在哪 |
+
+**记忆与 bug**
+
+| 命令 | 作用 | 什么时候用 |
+|---|---|---|
+| `wolf bug search <term>` | 搜索 `.wolf/buglog.json` | 重新排查可能已修复的问题之前 |
+| `wolf register [dir]` | 把工作区加进全局项目注册表 | 让 `wolf update` 覆盖你所有项目 |
+| `wolf unregister [dir]` | 从注册表移除 | 清理 |
+| `wolf update` | 备份 + 重扫所有已注册工作区 | 一次性刷新所有已索引项目 |
+
+**备份**
+
+| 命令 | 作用 | 什么时候用 |
+|---|---|---|
+| `wolf backups [dir]` | 列出时间戳 `.wolf/` 备份 | 看有哪些可回滚 |
+| `wolf restore [dir] [tag]` | 从备份恢复 `.wolf/`（默认最新） | 实验搞砸之后 |
+
+**调度与服务**
+
+| 命令 | 作用 | 什么时候用 |
+|---|---|---|
+| `wolf cron add <name> '<expr>' <scan\|check> [dir]` | 定时零 token 任务（cron 语法、`@daily` 等） | 无人值守刷新：如每晚 `scan` |
+| `wolf cron list [dir]` / `wolf cron run <id>` / `wolf cron remove <id>` | 管理定时任务 | 查看或手动触发任务 |
+| `wolf dashboard [dir]` | 前台运行 Web 仪表盘（`--port` / `--token` / `--token-file`） | 实时查看 token / 上下文 / anatomy |
+| `wolf daemon start [dir]` / `wolf daemon stop` | 后台守护：仪表盘 + cron 调度 | 不占用终端地常驻仪表盘与定时任务 |
 
 所有命令也以工具形式出现在会话里（`wolf_map`、`wolf_file`、`wolf_refresh`、
 `wolf_scan`、`wolf_init`、`wolf_status`、`wolf_learn`、`wolf_bug`、
-`wolf_report`、`wolf_schedule`）——模型自己能做这一切，CLI 只是给人和 cron 用的。
+`wolf_report`、`wolf_schedule`）——模型自己能做这一切，CLI 只是给人、脚本和
+cron 用的。
 
 ## 环境要求
 
@@ -329,7 +377,8 @@ pnpm test         # node --test，进程内执行
 
 本包是**可擦除 TypeScript** + `rewriteRelativeImportExtensions`：`node` 可
 直接运行 `src/` 做测试，`tsc` 产出发布用的 ESM `lib/`。`prepare` 脚本从源码
-构建，这正是 git 安装能工作的原因。
+构建，这正是 git 安装能工作的原因。想在真实 harness profile 里跑本地
+checkout，见[从源码安装](docs/INSTALL-FROM-SOURCE.md)。
 
 ## License
 

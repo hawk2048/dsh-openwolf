@@ -22,6 +22,7 @@
 <p align="center">
   <a href="#quick-start"><b>Quick Start</b></a> &nbsp;&middot;&nbsp;
   <a href="#what-it-creates"><b>What It Creates</b></a> &nbsp;&middot;&nbsp;
+  <a href="#initialize-and-keep-it-fresh"><b>Initialize</b></a> &nbsp;&middot;&nbsp;
   <a href="#how-it-works"><b>How It Works</b></a> &nbsp;&middot;&nbsp;
   <a href="#token-intelligence"><b>Token Intelligence</b></a> &nbsp;&middot;&nbsp;
   <a href="#dashboard"><b>Dashboard</b></a> &nbsp;&middot;&nbsp;
@@ -87,21 +88,16 @@ then on, and works underneath — use the harness exactly as you always have.
 The agent runs the `dsh plugin` command for you and tells you when to restart.
 Works from the Web GUI or the `headless` profile.
 
-Installing from npm needs no authorization. From a local checkout or a git
-URL the package is pulled as source, so the first `add` fails until you allow
-its build in the profile's `pnpm-workspace.yaml`:
-
-```yaml
-allowBuilds:
-  dsh-openwolf: true
-```
-
-then re-run `add`. The `wolf` CLI also works standalone once the package is
-installed anywhere:
+The `wolf` CLI also works standalone once the package is installed anywhere
+(see [Commands](#commands)):
 
 ```sh
 npx wolf init . && npx wolf scan .
 ```
+
+Installing from a git URL or a local checkout needs extra build
+authorization — see [Installing from Source](docs/INSTALL-FROM-SOURCE.md) for
+that path.
 
 ## What It Creates
 
@@ -119,6 +115,39 @@ The first scan creates a `.wolf/` directory in your workspace:
 | `hooks/` | Session state, scan state (git HEAD pin), precompact snapshots |
 | `config.json` | Configuration, including the session-digest budget |
 | `OPENWOLF.md` | The operating protocol your agents follow |
+
+## Initialize and Keep It Fresh
+
+**Nothing needs manual setup** — the plugin initializes the brain lazily on
+its first use in a workspace and rescans automatically:
+
+- **First contact**: the first `wolf_*` tool call (or the first session with
+  `injectAgentsMd`) creates `.wolf/`, scans the workspace once, and injects
+  the map into `AGENTS.md`. No `init` step required.
+- **Auto-refresh**: a debounced watcher rescans on file changes; `write`/`edit`
+  results re-analyze the single changed file immediately, so the map and
+  `anatomy.md` stay fresh while you work.
+- **Session-start digest**: every new session gets a budget-capped digest
+  (STATUS 🚀 / Do-Not-Repeat / recent bugs / anatomy pointer) plus a
+  staleness warning when the scan is old or the git HEAD moved.
+
+When you do want explicit control, everything is one command (also available
+as tools inside a session):
+
+| You want to… | Command (CLI) | Tool (in session) |
+|---|---|---|
+| Rebuild the whole index from disk now | `wolf scan` | `wolf_refresh` |
+| Verify the index still matches the filesystem (CI-friendly) | `wolf scan --check` | `wolf_scan` |
+| Initialize `.wolf/` by hand (idempotent, rarely needed) | `wolf init` | `wolf_init` |
+| Write/read the session handoff doc | `wolf status` | `wolf_status` |
+| Update every registered project (with backup first) | `wolf update` | — |
+| Roll back `.wolf/` from a timestamped backup | `wolf restore` | — |
+| Schedule unattended rescans (zero token) | `wolf cron add … scan` | `wolf_schedule` |
+
+> **Tip**: you rarely need any of this — the plugin's job is to make the
+> brain self-maintaining. Run `wolf scan` only when you changed many files
+> outside the harness (e.g. a big `git pull`) and want the map rebuilt
+> immediately.
 
 ## How It Works
 
@@ -281,25 +310,48 @@ stream re-renders the active panel the moment a brain file changes, with a
 
 ## Commands
 
-```
-wolf init [dir]              Initialize .wolf/ (idempotent)
-wolf scan [dir]              Rebuild the project index (+ render anatomy.md, inject AGENTS.md)
-wolf scan --check [dir]      Verify the index matches the filesystem (CI-friendly; exit 1 on drift)
-wolf status [dir]            Brain health: config, scan state, ledger
-wolf report [dir]            Token report: measured vs estimated
-wolf dashboard [dir]         Open the web dashboard (--port, --token, --token-file)
-wolf daemon start|stop [dir] Background daemon: dashboard + cron scheduler
-wolf cron add|list|run|remove  Scheduled zero-token tasks
-wolf bug search <term>       Search the bug memory
-wolf register|unregister [dir]  Workspace registry (for `update`)
-wolf update                  Update every registered project (with backup)
-wolf backups [dir] / wolf restore [dir] [tag]   Roll back .wolf/ from a backup
-```
+All commands take an optional directory (default: current working directory).
+They are grouped by what you are trying to do:
 
-All commands also work as tools inside a session (`wolf_map`, `wolf_file`,
+**Brain lifecycle**
+
+| Command | What it does | When to use it |
+|---|---|---|
+| `wolf init [dir]` | Create `.wolf/` (idempotent) | Usually unnecessary — the brain initializes itself on first use |
+| `wolf scan [dir]` | Rebuild the project index, render `anatomy.md`, inject `AGENTS.md` | After a big change outside the harness (e.g. `git pull`) when you want the map rebuilt now |
+| `wolf scan --check [dir]` | Verify the index matches the filesystem (size/mtime + git HEAD) | CI or pre-session verification; exits 1 on drift |
+| `wolf status [dir]` | Brain health: config, scan state, ledger, memory/buglog counts | "Is my brain healthy?" |
+| `wolf report [dir]` | Token ledger summary: measured vs estimated per session | Understanding where tokens went |
+
+**Memory and bugs**
+
+| Command | What it does | When to use it |
+|---|---|---|
+| `wolf bug search <term>` | Search `.wolf/buglog.json` | Before re-debugging something that may already be fixed |
+| `wolf register [dir]` | Add the workspace to the global project registry | Enables `wolf update` across all your projects |
+| `wolf unregister [dir]` | Remove it from the registry | Cleanup |
+| `wolf update` | Backup + rescan every registered workspace | Refresh all indexed projects at once |
+
+**Backups**
+
+| Command | What it does | When to use it |
+|---|---|---|
+| `wolf backups [dir]` | List timestamped `.wolf/` backups | See what you can roll back to |
+| `wolf restore [dir] [tag]` | Restore `.wolf/` from a backup (newest by default) | After an experiment went wrong |
+
+**Scheduling and serving**
+
+| Command | What it does | When to use it |
+|---|---|---|
+| `wolf cron add <name> '<expr>' <scan\|check> [dir]` | Schedule a zero-token task (cron syntax, `@daily` etc.) | Unattended refreshes: e.g. nightly `scan` |
+| `wolf cron list [dir]` / `wolf cron run <id>` / `wolf cron remove <id>` | Manage scheduled tasks | Inspect or trigger tasks by hand |
+| `wolf dashboard [dir]` | Serve the web dashboard in the foreground (`--port`, `--token`, `--token-file`) | Live overview of tokens / context / anatomy |
+| `wolf daemon start [dir]` / `wolf daemon stop` | Run dashboard + cron scheduler as a background daemon | Keep the dashboard and scheduled tasks running without a terminal |
+
+Every command also exists as a session tool (`wolf_map`, `wolf_file`,
 `wolf_refresh`, `wolf_scan`, `wolf_init`, `wolf_status`, `wolf_learn`,
 `wolf_bug`, `wolf_report`, `wolf_schedule`) — the model can do all of this
-itself, so the CLI is only for humans and cron.
+itself, so the CLI is only for humans, scripts, and cron.
 
 ## Requirements
 
@@ -369,7 +421,8 @@ pnpm test         # node --test, in-process
 The package is **erasable TypeScript** with `rewriteRelativeImportExtensions`,
 so `node` can run `src/` directly for tests while `tsc` emits the ESM `lib/`
 for publication. `prepare` builds from source, which is what makes git-based
-installs work.
+installs work. For running a local checkout inside a real harness profile,
+see [Installing from Source](docs/INSTALL-FROM-SOURCE.md).
 
 ## License
 

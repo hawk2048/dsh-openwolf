@@ -5,6 +5,38 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.3] — 2026-08-15
+
+### Changed (docs)
+
+- **Quick Start simplified** — the main README now shows only the two-line
+  install plus the conversational "ask the harness to install it" path; the
+  source/git-install method (including `allowBuilds`) moved to
+  `docs/INSTALL-FROM-SOURCE.md` so casual readers are not confused by build
+  authorization details.
+- **New "Initialize and Keep It Fresh" section** — explains that the brain
+  initializes itself on first use and stays fresh automatically (watcher,
+  write-interception refresh, session-start digest), with a table mapping
+  intent → CLI command → session tool for the rare explicit cases.
+- **Commands section rewritten** — every `wolf` subcommand is grouped by use
+  case (brain lifecycle / memory & bugs / backups / scheduling & serving)
+  with a "when to use it" column.
+
+## [0.8.2] — 2026-08-15
+
+### Changed
+
+- **npm README fix** — renamed `README.zh.md` to `README-zh.md` so npm's
+  readme detection (`{README,README.*}` glob) picks the English `README.md`;
+  the Chinese README ships via the `files` array instead.
+
+## [0.8.1] — 2026-08-15
+
+### Changed
+
+- Ship the restructured READMEs (OpenWolf-style hero + Quick Start) and the
+  new `CHANGELOG.md` in the npm tarball.
+
 ## [0.8.0] — 2026-08-15
 
 First stable `0.x.0` release (no `-rc` suffix). OpenWolf v2.0.1 feature
@@ -174,6 +206,9 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.3]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.3
+[0.8.2]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.2
+[0.8.1]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.1
 [0.8.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.0
 [0.7.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.7.0-rc.2
 [0.6.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.6.0-rc.3
