@@ -5,6 +5,21 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.13] — 2026-08-15
+
+### Added
+
+- **`dshwolf init --agent <name>` — OpenWolf-style initialization.** Mirrors
+  `openwolf init --agent claude`: after creating the brain, also wires the
+  plugin into the harness in one shot (dependency + bundle row + `pnpm
+  install`). Names: a profile (`web`, `headless`), `all` for every profile,
+  or `deepseek-harness` / `dsh` / `harness` as aliases for the default
+  `web`. `--no-install` edits only. `resolveDir` now ignores the value
+  following `--agent`; the wiring logic was extracted into a shared
+  `wireIntoProfile()` used by both `init --agent` and `harness add`.
+  Verified live: `dshwolf init <dir> --agent deepseek-harness` printed
+  "brain initialized …" + "✓ … installed into profile 'web'".
+
 ## [0.8.12] — 2026-08-15
 
 ### Changed
@@ -325,6 +340,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.13]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.13
 [0.8.12]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.12
 [0.8.11]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.11
 [0.8.10]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.10

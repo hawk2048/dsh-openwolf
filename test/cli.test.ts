@@ -33,6 +33,87 @@ test('dshwolf init creates the brain', async () => {
   await assert.rejects(() => readFile(join(dir, '.wolf/config.json'), 'utf8').then(() => Promise.reject(new Error('missing'))), /missing/)
 })
 
+test('dshwolf init --agent deepseek-harness initializes brain AND wires the default profile', async () => {
+  const profiles = await mkdtemp(join(tmpdir(), 'openwolf-init-agent-'))
+  await mkdir(join(profiles, 'web'), { recursive: true })
+  await writeFile(join(profiles, 'web/package.json'), JSON.stringify({
+    name: 'dsh-profile-web', private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } },
+  }))
+  const oldEnv = process.env.DSH_WOLF_PROFILES_DIR
+  process.env.DSH_WOLF_PROFILES_DIR = profiles
+  try {
+    out = ''
+    // --no-install keeps the test hermetic (no pnpm run, no network).
+    assert.equal(await main(['init', dir, '--agent', 'deepseek-harness', '--no-install'], io), 0)
+    assert.match(out, /brain initialized/)
+    assert.match(out, /wired into profile 'web'/)
+    const doc = JSON.parse(await readFile(join(profiles, 'web/package.json'), 'utf8'))
+    assert.ok(doc.dependencies['dsh-openwolf'], 'dependency added to web profile')
+    assert.ok(doc.dsh.profile.bundles.includes('dsh-openwolf'), 'bundle registered')
+    // Aliases map to the same default profile.
+    for (const alias of ['dsh', 'harness']) {
+      out = ''
+      assert.equal(await main(['init', dir, '--agent', alias, '--no-install'], io), 0)
+      assert.match(out, /wired into profile 'web'/)
+    }
+  } finally {
+    if (oldEnv === undefined) delete process.env.DSH_WOLF_PROFILES_DIR
+    else process.env.DSH_WOLF_PROFILES_DIR = oldEnv
+    await rm(profiles, { recursive: true, force: true })
+  }
+})
+
+test('dshwolf init --agent <profile> wires that profile; --agent all wires every profile', async () => {
+  const profiles = await mkdtemp(join(tmpdir(), 'openwolf-init-agent2-'))
+  for (const name of ['web', 'headless']) {
+    await mkdir(join(profiles, name), { recursive: true })
+    await writeFile(join(profiles, `${name}/package.json`), JSON.stringify({
+      name: `dsh-profile-${name}`, private: true,
+      dependencies: {},
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } },
+    }))
+  }
+  const oldEnv = process.env.DSH_WOLF_PROFILES_DIR
+  process.env.DSH_WOLF_PROFILES_DIR = profiles
+  try {
+    out = ''
+    assert.equal(await main(['init', dir, '--agent', 'headless', '--no-install'], io), 0)
+    assert.match(out, /wired into profile 'headless'/)
+    const doc = JSON.parse(await readFile(join(profiles, 'headless/package.json'), 'utf8'))
+    assert.ok(doc.dependencies['dsh-openwolf'])
+    const webDoc = JSON.parse(await readFile(join(profiles, 'web/package.json'), 'utf8'))
+    assert.equal(webDoc.dependencies['dsh-openwolf'], undefined, 'web untouched by headless-only init')
+    // --agent all wires every profile.
+    out = ''
+    assert.equal(await main(['init', dir, '--agent', 'all', '--no-install'], io), 0)
+    assert.match(out, /wired into profile 'web'/)
+    assert.match(out, /wired into profile 'headless'/)
+    const webDoc2 = JSON.parse(await readFile(join(profiles, 'web/package.json'), 'utf8'))
+    assert.ok(webDoc2.dependencies['dsh-openwolf'], 'web wired by --agent all')
+  } finally {
+    if (oldEnv === undefined) delete process.env.DSH_WOLF_PROFILES_DIR
+    else process.env.DSH_WOLF_PROFILES_DIR = oldEnv
+    await rm(profiles, { recursive: true, force: true })
+  }
+})
+
+test('dshwolf init --agent <unknown> fails cleanly', async () => {
+  const profiles = await mkdtemp(join(tmpdir(), 'openwolf-init-agent-bad-'))
+  const oldEnv = process.env.DSH_WOLF_PROFILES_DIR
+  process.env.DSH_WOLF_PROFILES_DIR = profiles
+  try {
+    err = ''
+    assert.equal(await main(['init', dir, '--agent', 'nope', '--no-install'], io), 1)
+    assert.match(err, /no profile 'nope'/)
+  } finally {
+    if (oldEnv === undefined) delete process.env.DSH_WOLF_PROFILES_DIR
+    else process.env.DSH_WOLF_PROFILES_DIR = oldEnv
+    await rm(profiles, { recursive: true, force: true })
+  }
+})
+
 test('dshwolf scan builds the index and pins state', async () => {
   out = ''
   const code = await main(['scan', dir], io)

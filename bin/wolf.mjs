@@ -39,15 +39,30 @@ function scanOptions() {
 function resolveDir(argv) {
   const flagged = argv.find((a) => a.startsWith('--dir='))
   if (flagged !== undefined) return resolve(process.cwd(), flagged.slice(6))
-  const positional = argv.filter((a) => !a.startsWith('-'))
+  // The value following `--agent` (OpenWolf-style space form) is NOT a dir.
+  const skip = new Set()
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--agent' && argv[i + 1] !== undefined && !argv[i + 1].startsWith('-')) skip.add(i + 1)
+  }
+  const positional = argv.filter((a, i) => !a.startsWith('-') && !skip.has(i))
   const last = positional.at(-1)
   return last !== undefined ? resolve(process.cwd(), last) : process.cwd()
+}
+
+/** Read `--name=value` or `--name value` (OpenWolf-style). */
+function flagValue(rest, name, fallback) {
+  const eq = rest.find((a) => a.startsWith(`--${name}=`))
+  if (eq !== undefined) return eq.slice(name.length + 3)
+  const idx = rest.indexOf(`--${name}`)
+  if (idx !== -1 && rest[idx + 1] !== undefined && !rest[idx + 1].startsWith('-')) return rest[idx + 1]
+  return fallback
 }
 
 const USAGE = `usage: dshwolf <command> [args]
 
   Brain lifecycle
     dshwolf init [dir]            initialize .wolf/ brain
+                                  (--agent <profile|all|deepseek-harness> also wires the harness)
     dshwolf scan [dir]            rescan + pin state + render anatomy.md + inject AGENTS.md
     dshwolf scan --check [dir]    verify index vs filesystem (CI-friendly; exit 1 on drift)
     dshwolf status [dir]          brain health: config, scan state, ledger, memory/buglog
@@ -182,6 +197,62 @@ export async function resolveToken(rest) {
   return { token: randomBytes(12).toString('hex'), tokenFile: undefined }
 }
 
+/** The DSH profiles directory (env-overridable for tests). */
+function profilesDirOf() {
+  return process.env.DSH_WOLF_PROFILES_DIR !== undefined
+    ? resolve(process.env.DSH_WOLF_PROFILES_DIR)
+    : join(homedir(), '.dsh', 'profiles')
+}
+
+/**
+ * Wire dsh-openwolf into one profile: add the dependency + bundle row to its
+ * package.json, and (unless `noInstall`) run pnpm install there. Returns the
+ * process exit code. Shared by `dshwolf harness add` and
+ * `dshwolf init --agent <profile>`.
+ */
+async function wireIntoProfile(profilesDir, profileName, io, { noInstall = false } = {}) {
+  const pkgPath = join(profilesDir, profileName, 'package.json')
+  if (!existsSync(pkgPath)) {
+    io.err(`no profile '${profileName}' at ${pkgPath}`)
+    return 1
+  }
+  // Pin the version this CLI ships with (same package, so it matches).
+  const ownVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
+  const doc = JSON.parse(await readFile(pkgPath, 'utf8'))
+  doc.dependencies = doc.dependencies ?? {}
+  doc.dependencies['dsh-openwolf'] = ownVersion
+  doc.dsh = doc.dsh ?? { profile: { bundles: [] } }
+  doc.dsh.profile = doc.dsh.profile ?? { bundles: [] }
+  if (!doc.dsh.profile.bundles.includes('dsh-openwolf')) doc.dsh.profile.bundles.push('dsh-openwolf')
+  await writeFile(pkgPath, JSON.stringify(doc, null, 2) + '\n', 'utf8')
+  const profileDir = join(profilesDir, profileName)
+  if (noInstall) {
+    io.out(`✓ dsh-openwolf@${ownVersion} wired into profile '${profileName}' (run pnpm install in ${profileDir} to finish)`)
+    return 0
+  }
+  // One-command wiring: install the dependency inside the profile too.
+  // pnpm output is suppressed — the user only needs the outcome.
+  const installCode = await new Promise((resolve) => {
+    // Windows ships pnpm as a .cmd shim; run it via cmd.exe with an
+    // argument array (no shell execution, no string interpolation).
+    const child =
+      process.platform === 'win32'
+        ? spawn('cmd.exe', ['/c', 'pnpm', 'install', '--registry=https://registry.npmjs.org', '--no-frozen-lockfile'], { cwd: profileDir, stdio: 'ignore' })
+        : spawn('pnpm', ['install', '--registry=https://registry.npmjs.org', '--no-frozen-lockfile'], { cwd: profileDir, stdio: 'ignore' })
+    child.on('error', (e) => {
+      io.err(`✗ could not run pnpm: ${e.message} (run it manually: cd ${profileDir} && pnpm install)`)
+      resolve(null)
+    })
+    child.on('close', (code) => resolve(code))
+  })
+  if (installCode !== 0) {
+    io.err(`✗ pnpm install failed (run it manually: cd ${profileDir} && pnpm install)`)
+    return 1
+  }
+  io.out(`✓ dsh-openwolf@${ownVersion} installed into profile '${profileName}'. Restart the harness (dsh web) to activate it.`)
+  return 0
+}
+
 /** Run the CLI. Returns the process exit code. */
 export async function main(argv = [], io = { out: console.log, err: console.error }) {
   const [cmd, ...rest] = argv
@@ -204,7 +275,37 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
     case 'init': {
       await brain.ensure()
       io.out(`brain initialized at ${join(dir, '.wolf')}`)
-      return 0
+      // `dshwolf init --agent <name>` mirrors `openwolf init --agent claude`:
+      // after initializing the brain, also wire the plugin into the harness.
+      // Names: a profile name ('web', 'headless'), 'all' for every profile, or
+      // 'deepseek-harness'/'dsh'/'harness' as aliases for the default 'web'.
+      const agent = flagValue(rest, 'agent', undefined)
+      if (agent === undefined) return 0
+      const profilesDir = profilesDirOf()
+      const noInstall = rest.includes('--no-install')
+      const alias = (n) => (n === 'deepseek-harness' || n === 'dsh' || n === 'harness' ? 'web' : n)
+      if (agent === 'all') {
+        let names = []
+        try {
+          names = (await readdir(profilesDir, { withFileTypes: true }))
+            .filter((e) => e.isDirectory() && existsSync(join(profilesDir, e.name, 'package.json')))
+            .map((e) => e.name)
+            .sort()
+        } catch {
+          io.err(`no DSH profiles dir at ${profilesDir}`)
+          return 1
+        }
+        if (names.length === 0) {
+          io.err(`no DSH profiles found at ${profilesDir}`)
+          return 1
+        }
+        let failed = 0
+        for (const name of names) {
+          failed += (await wireIntoProfile(profilesDir, name, io, { noInstall })) !== 0 ? 1 : 0
+        }
+        return failed === 0 ? 0 : 1
+      }
+      return wireIntoProfile(profilesDir, alias(agent), io, { noInstall })
     }
     case 'scan': {
       const check = rest.includes('--check')
@@ -584,47 +685,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       if (action === 'add') {
         const profileName = rest.slice(1).find((a) => !a.startsWith('-')) ?? 'web'
         const noInstall = rest.includes('--no-install')
-        const pkgPath = join(profilesDir, profileName, 'package.json')
-        if (!existsSync(pkgPath)) {
-          io.err(`no profile '${profileName}' at ${pkgPath}`)
-          return 1
-        }
-        // Pin the version this CLI ships with (same package, so it matches).
-        const ownVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
-        const doc = JSON.parse(await readFile(pkgPath, 'utf8'))
-        doc.dependencies = doc.dependencies ?? {}
-        doc.dependencies['dsh-openwolf'] = ownVersion
-        doc.dsh = doc.dsh ?? { profile: { bundles: [] } }
-        doc.dsh.profile = doc.dsh.profile ?? { bundles: [] }
-        if (!doc.dsh.profile.bundles.includes('dsh-openwolf')) doc.dsh.profile.bundles.push('dsh-openwolf')
-        await writeFile(pkgPath, JSON.stringify(doc, null, 2) + '\n', 'utf8')
-        const profileDir = join(profilesDir, profileName)
-        if (noInstall) {
-          io.out(`✓ dsh-openwolf@${ownVersion} wired into profile '${profileName}' (run pnpm install in ${profileDir} to finish)`)
-          return 0
-        }
-        // One-command wiring: install the dependency inside the profile too,
-        // mirroring `openwolf init --agent` doing the whole setup in one shot.
-        // pnpm output is suppressed — the user only needs the outcome.
-        const installCode = await new Promise((resolve) => {
-          // Windows ships pnpm as a .cmd shim; run it via cmd.exe with an
-          // argument array (no shell execution, no string interpolation).
-          const child =
-            process.platform === 'win32'
-              ? spawn('cmd.exe', ['/c', 'pnpm', 'install', '--registry=https://registry.npmjs.org', '--no-frozen-lockfile'], { cwd: profileDir, stdio: 'ignore' })
-              : spawn('pnpm', ['install', '--registry=https://registry.npmjs.org', '--no-frozen-lockfile'], { cwd: profileDir, stdio: 'ignore' })
-          child.on('error', (e) => {
-            io.err(`✗ could not run pnpm: ${e.message} (run it manually: cd ${profileDir} && pnpm install)`)
-            resolve(null)
-          })
-          child.on('close', (code) => resolve(code))
-        })
-        if (installCode !== 0) {
-          io.err(`✗ pnpm install failed (run it manually: cd ${profileDir} && pnpm install)`)
-          return 1
-        }
-        io.out(`✓ dsh-openwolf@${ownVersion} installed into profile '${profileName}'. Restart the harness (dsh web) to activate it.`)
-        return 0
+        return wireIntoProfile(profilesDir, profileName, io, { noInstall })
       }
       io.err('usage: dshwolf harness status | dshwolf harness add [profile-name]')
       return 2

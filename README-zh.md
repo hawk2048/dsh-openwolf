@@ -96,23 +96,33 @@ dshwolf init . && dshwolf scan .     # 初始化 + 索引当前目录
 ```
 
 **要在 harness 里也使能**（会话获得工具、会话摘要、读/写拦截——而不只是
-CLI），把已装的包接进某个 profile——**一条命令同时完成接线 + 安装依赖**：
+CLI），把已装的包接进某个 profile——**一条命令同时完成初始化 + 接线 +
+安装依赖**：
 
 ```bash
-dshwolf harness status         # 看看哪些 profile 已接线
-dshwolf harness add web        # 接线 + pnpm install 装进 'web' profile（默认）
-dsh web                        # 重启 harness（或重启 GUI）
+dshwolf init . --agent deepseek-harness   # 初始化 + 接进默认 profile（web）
+dsh web                                   # 重启 harness（或重启 GUI）
+```
+
+也可以指定某个 profile 或全部，OpenWolf 风格：
+
+```bash
+dshwolf init . --agent headless           # 接进 'headless' profile
+dshwolf init . --agent all                # 接进所有 profile
+dshwolf harness status                    # 看看哪些 profile 已接线
+dshwolf harness add web                   # 显式接线 + 安装到某个 profile
 ```
 
 > **为什么需要这一步。** CLI 和 harness 插件是同一个 `.wolf/` 大脑的两个
 > 前端——CLI 初始化的内容（地图、STATUS、memory、buglog、账本）正是 harness
 > 读取的内容。但全局 `npm install` 对 harness **不可见**：harness 只解析你
 > profile `dependencies` 里声明的包（已实测：profile `node_modules` 解析不到
-> 全局副本）。`dshwolf harness add` 替你注册依赖 + bundle 行**并自动运行
-> `pnpm install`**（对应 OpenWolf `openwolf init --agent` 的一步到位；只想改
-> package.json 时用 `--no-install`，如 CI）。两个前端并存——CLI 给人和 cron
-> 用、插件给会话用，共享同一个大脑。DSH 本身就是 agent 平台，所以"接线"=
-> profile 里注册一行，而不是 OpenWolf 的 hook 文件安装。
+> 全局副本）。`dshwolf init --agent`（与 `harness add`）替你注册依赖 + bundle
+> 行**并自动运行 `pnpm install`**——对应 OpenWolf `openwolf init --agent
+> claude` 的一步到位（只想改 package.json 时用 `--no-install`，如 CI）。两个
+> 前端并存——CLI 给人和 cron 用、插件给会话用，共享同一个大脑。DSH 本身就是
+> agent 平台，所以"接线"= profile 里注册一行，而不是 OpenWolf 的 hook 文件
+> 安装。
 
 从 git URL 或本地 checkout 安装需要额外的构建授权——见
 [从源码安装](docs/INSTALL-FROM-SOURCE.md)。
@@ -321,7 +331,7 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `dshwolf init [dir]` | 创建 `.wolf/`（幂等） | 通常不需要——大脑首次使用时自动初始化 |
+| `dshwolf init [dir]` | 创建 `.wolf/`（幂等）；`--agent <profile\|all\|deepseek-harness>` 同时接线 + 安装进 harness | 通常不需要——大脑首次使用时自动初始化；`--agent` 是方式 2 的一条命令初始化 |
 | `dshwolf scan [dir]` | 重建项目索引、渲染 `anatomy.md`、注入 `AGENTS.md` | 在 harness 之外做了大改动（如 `git pull`）想立刻重建地图 |
 | `dshwolf scan --check [dir]` | 校验索引与文件系统一致（size/mtime + git HEAD） | CI 或会话前校验；漂移退出码 1 |
 | `dshwolf status [dir]` | 大脑健康：配置、扫描状态、账本、memory/buglog 计数 | "我的大脑健康吗？" |

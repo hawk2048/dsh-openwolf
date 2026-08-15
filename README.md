@@ -114,9 +114,17 @@ package into a profile — one command does the wiring *and* installs the
 dependency:
 
 ```bash
-dshwolf harness status         # see which profiles have it wired
-dshwolf harness add web        # wire + pnpm-install into the 'web' profile (default)
-dsh web                        # restart the harness (or restart the GUI)
+dshwolf init . --agent deepseek-harness   # initialize + wire the default profile (web)
+dsh web                                   # restart the harness (or restart the GUI)
+```
+
+Or pick a specific profile / all profiles, OpenWolf-style:
+
+```bash
+dshwolf init . --agent headless           # wire the 'headless' profile
+dshwolf init . --agent all                # wire every profile
+dshwolf harness status                    # see which profiles have it wired
+dshwolf harness add web                   # wire + install into one profile explicitly
 ```
 
 > **Why this step exists.** The CLI and the harness plugin are two frontends
@@ -124,10 +132,10 @@ dsh web                        # restart the harness (or restart the GUI)
 > memory, buglog, ledger) is exactly what the harness reads. But a global
 > `npm install` is invisible to the harness: it only resolves packages
 > declared in your profile's `dependencies` (verified: a global copy is *not*
-> resolvable from the profile's `node_modules`). `dshwolf harness add`
-> registers the dependency + bundle row **and runs `pnpm install` for you**
-> (mirroring `openwolf init --agent` doing the whole setup in one shot; use
-> `--no-install` if you want to edit only, e.g. in CI). Both frontends then
+> resolvable from the profile's `node_modules`). `dshwolf init --agent` (and
+> `harness add`) register the dependency + bundle row **and run `pnpm install`
+> for you** — mirroring `openwolf init --agent claude` doing the whole setup
+> in one shot (`--no-install` edits only, e.g. in CI). Both frontends then
 > work side by side — CLI for humans and cron, plugin for sessions, one
 > shared brain. DSH *is* the agent platform, so "wiring" is a one-line
 > profile registration instead of OpenWolf's hook-file installation.
@@ -367,7 +375,7 @@ They are grouped by what you are trying to do:
 
 | Command | What it does | When to use it |
 |---|---|---|
-| `dshwolf init [dir]` | Create `.wolf/` (idempotent) | Usually unnecessary — the brain initializes itself on first use |
+| `dshwolf init [dir]` | Create `.wolf/` (idempotent); `--agent <profile\|all\|deepseek-harness>` also wires + installs into the harness | Usually unnecessary — the brain initializes itself on first use; `--agent` is the one-command Way 2 setup |
 | `dshwolf scan [dir]` | Rebuild the project index, render `anatomy.md`, inject `AGENTS.md` | After a big change outside the harness (e.g. `git pull`) when you want the map rebuilt now |
 | `dshwolf scan --check [dir]` | Verify the index matches the filesystem (size/mtime + git HEAD) | CI or pre-session verification; exits 1 on drift |
 | `dshwolf status [dir]` | Brain health: config, scan state, ledger, memory/buglog counts | "Is my brain healthy?" |
