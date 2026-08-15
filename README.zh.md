@@ -119,6 +119,35 @@ harness 自带的 `agent-instructions` 插件本来就会把 `AGENTS.md`（以�
 
 后层可按 `id` 整体覆盖该行，部署方可以保留自己的默认值。
 
+## 用与不用 dsh-openwolf 的差异
+
+插件对本工作区 agent 会话的改变，以及运行它的诚实代价。
+
+| 不用 dsh-openwolf | 用 dsh-openwolf |
+| --- | --- |
+| 模型反复整文件重读（每次 ~2k tokens） | 先看一行摘要 + token 估算；重复读会被标记 |
+| 为找一个函数整文件读取 | 符号行号提示 → `offset`/`limit` 定向读 |
+| 上下文压缩抹掉已做的工作 | 压缩幸存：恢复摘要列出本会话已改文件 |
+| 每个会话从冷提示开始 | 预算封顶的会话摘要预载 STATUS🚀/Do-Not-Repeat/最近 bugs/地图指针 |
+| 不知道 token 花在哪 | 按会话实测账本（provider usage）+ `wolf_report` + dashboard |
+| 修过的 bug 反复排查 | `wolf_bug` 搜索防 rediscovery；`wolf_learn` 持久化纠正 |
+| 无人值守刷新要手动 | `wolf_schedule` + daemon 零 token 自动 scan |
+| 没有项目全局视图 | `anatomy.md` + dashboard（健康/token/活动/cron） |
+
+### 使用它的代价
+
+- **上下文 tokens**：注入的 `AGENTS.md` 地图块（上限 `maxMapBytes`，默认 16 KiB ≈ 4k tokens）随每个会话基线常驻，另有会话摘要（上限 `sessionDigestBudgetTokens`，默认 1500）。两者前缀稳定（KV-cache 友好）。
+- **工作区元数据**：每工作区一个 `.wolf/` 目录（KB 级）+ `AGENTS.md` 内的受管块。秘密文件按设计排除。
+- **hook 在进程内运行**：读提示附加在结果上（`tools/post-execute`——DSH 没有读前拦截缝，提示与结果同达而非严格先于读取）。
+- **符号覆盖**：lezer 覆盖 TS/JS、Python、Go、Rust、Java；其余语言回退正则启发式。
+- **daemon/CLI 是独立进程**（与原版同架构）——cron/update/dashboard 需要它。
+
+### 与原版（OpenWolf v2.0.1）的已知差距
+
+- **多 agent 接线 N/A**——原版钩 5 个外部 agent（Claude Code/Codex/OpenCode/Gemini/Cursor）；DSH 本身是 agent 平台，一个大脑服务所有 DSH 会话与子代理。
+- **未桥接 `dsh-schedule`**——cron 引擎为自研独立实现（每次运行 0 token），而非 harness 的模型面向调度器。
+- **dashboard 是零依赖服务器渲染单页**（面板子集），非 React SPA；描述提取器是原版大启发式的紧凑移植。
+
 ## 开发
 
 ```sh

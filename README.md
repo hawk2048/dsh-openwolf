@@ -145,6 +145,47 @@ wolf status [dir]           # brain health
 wolf report [dir]           # token ledger summary
 ```
 
+## With vs without dsh-openwolf
+
+What the plugin changes for an agent session in this workspace, and the honest tradeoffs of running it.
+
+| Without dsh-openwolf | With dsh-openwolf |
+| --- | --- |
+| The model re-reads whole files it already saw (~2k tokens each) | One-line summaries + token estimates first; repeated reads are flagged |
+| Whole-file reads just to find one function | Symbol hints with line ranges → `offset`/`limit` reads |
+| Context compaction wipes what the session did | Compaction survival: a restore digest lists files already modified |
+| Every session starts from a cold prompt | A budget-capped session digest preloads STATUS 🚀 / Do-Not-Repeat / recent bugs / the anatomy pointer |
+| No idea where tokens went | Per-session measured ledger (provider usage) + `wolf_report` + dashboard |
+| Fixed bugs get re-debugged | `wolf_bug` search prevents rediscovery; `wolf_learn` persists corrections |
+| Unattended refreshes need manual action | `wolf_schedule` + daemon run scans at zero token cost |
+| No project-wide view | `anatomy.md` + dashboard (health / tokens / activity / cron) |
+
+### What running it costs you
+
+- **Context tokens**: the injected `AGENTS.md` map block (bounded by `maxMapBytes`,
+  default 16 KiB ≈ 4k tokens) rides every session baseline, plus the session
+  digest (bounded by `sessionDigestBudgetTokens`, default 1500). Both are
+  prefix-stable (KV-cache friendly).
+- **Workspace metadata**: a `.wolf/` directory per workspace (KBs) and a managed
+  block inside `AGENTS.md`. Secrets are excluded by design.
+- **Hooks run in-process**: read hints attach to the result (`tools/post-execute` —
+  DSH has no pre-read seam, so hints arrive with, not strictly before, the read).
+- **Symbol coverage**: lezer covers TS/JS, Python, Go, Rust, Java; other
+  languages fall back to the regex heuristic.
+- **A daemon/CLI process** is separate from the harness (same architecture as the
+  reference project) — needed for cron/update/dashboard.
+
+### Known gaps vs the reference (OpenWolf v2.0.1)
+
+- **Multi-agent wiring is N/A** — the reference hooks five external agents
+  (Claude Code/Codex/OpenCode/Gemini/Cursor); DSH is the agent platform itself,
+  so one brain serves every DSH session and subagent.
+- **`dsh-schedule` bridge not built** — the cron engine is self-contained
+  (zero token per run) rather than the harness's model-facing scheduler.
+- **Dashboard is a server-rendered single page** (zero deps) with a panel subset,
+  not a React SPA; the description extractor is a compact port of the
+  reference's larger heuristic.
+
 ## Development
 
 ```sh
