@@ -30,7 +30,7 @@ import { watch, type FSWatcher } from 'chokidar'
 import { scanCodebase, summarizeFile, analyzeFile, dirsFromFiles, refreshMapFromIndex } from './scanner.ts'
 import { injectBlock, renderMap } from './render.ts'
 import { WolfBrain, isSensitiveFile } from './brain.ts'
-import { buildSessionDigestWithWarning, buildSessionDigest, currentGitHead, anatomyStaleReason } from './digest.ts'
+import { buildSessionDigestWithWarning, currentGitHead, anatomyStaleReason, type TokenEstimator } from './digest.ts'
 import { bundledSkills } from './skills.ts'
 import { parseCron } from './cron.ts'
 import type { CodeMap, FileEntry, ScanOptions, SymbolBackend } from './types.ts'
@@ -314,7 +314,22 @@ export function apply(ctx: Context, config: Config) {
       }
       if (source === 'resume') return // history is intact on resume; no digest needed
       const budget = await brain.digestBudget(agent.options?.model ?? undefined)
-      const digest = await buildSessionDigestWithWarning(brain, budget, config.rescanIntervalHours)
+      // Prefer the harness token meter's fixed-density heuristic for digest
+      // budgeting when available; the char-ratio default applies otherwise.
+      const meter = ctx.get('tokenMeter') as
+        | { estimateMessage?: (m: { role: string; content: Array<{ type: string; text: string }> }) => number }
+        | undefined
+      const estimateMessage = meter?.estimateMessage
+      const estimate: TokenEstimator | undefined = estimateMessage
+        ? (text) => {
+            try {
+              return estimateMessage({ role: 'system', content: [{ type: 'text', text }] })
+            } catch {
+              return Math.ceil(text.length / 4)
+            }
+          }
+        : undefined
+      const digest = await buildSessionDigestWithWarning(brain, budget, config.rescanIntervalHours, estimate)
       if (digest !== '') {
         agent.inject(wolfMessage(digest))
       }

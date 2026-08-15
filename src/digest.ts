@@ -77,13 +77,18 @@ export async function anatomyStaleReason(brain: WolfBrain, rescanIntervalHours: 
   return null
 }
 
+/** A text→tokens estimator (char-ratio default; tokenMeter for better accuracy). */
+export type TokenEstimator = (text: string) => number
+
+const charRatioEstimator: TokenEstimator = (text) => estimateTokens(text, 'prose')
+
 /** Build the budget-capped session digest. Returns '' when nothing qualifies. */
-export async function buildSessionDigest(brain: WolfBrain, budget: number): Promise<string> {
+export async function buildSessionDigest(brain: WolfBrain, budget: number, estimate: TokenEstimator = charRatioEstimator): Promise<string> {
   const parts: string[] = []
   let used = 0
   const tryAdd = (text: string): void => {
     if (text === '') return
-    const cost = estimateTokens(text, 'prose')
+    const cost = estimate(text)
     if (used + cost > budget) return
     parts.push(text)
     used += cost
@@ -127,8 +132,9 @@ export async function buildSessionDigestWithWarning(
   brain: WolfBrain,
   budget: number,
   rescanIntervalHours: number,
+  estimate: TokenEstimator = charRatioEstimator,
 ): Promise<string> {
-  let digest = await buildSessionDigest(brain, budget)
+  let digest = await buildSessionDigest(brain, budget, estimate)
   const stale = await anatomyStaleReason(brain, rescanIntervalHours)
   if (stale !== null) {
     digest = `⚠ anatomy may be stale (${stale}). Run wolf_refresh before relying on it.\n\n${digest}`

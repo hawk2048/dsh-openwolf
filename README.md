@@ -96,14 +96,15 @@ When `brainEnabled` is on, each workspace gets a `.wolf/` directory:
 └── hooks/               # session state, scan state (git HEAD pin), precompact snapshots
 ```
 
-- **Session digest** — on `agent/session-start`, a budget-capped digest is injected via `agent.inject()`: STATUS 🚀 next phase → Do-Not-Repeat (last 10) → recent 5 bugs → anatomy pointer. A **staleness warning** is prepended when the pinned git HEAD moved or the last scan is older than `rescanIntervalHours`. Housekeeping reminders nudge the model to keep the brain fed (sparse cerebrum → `wolf_learn`; empty buglog → `wolf_bug`).
+- **Session digest** — on `agent/session-start`, a budget-capped digest is injected via `agent.inject()`: STATUS 🚀 next phase → Do-Not-Repeat (last 10) → recent 5 bugs → anatomy pointer. Section costs are priced with the harness token meter's heuristic (`ctx.tokenMeter.estimateMessage`) when available, char-ratio otherwise, so the budget behaves like the real request prefix. A **staleness warning** is prepended when the pinned git HEAD moved or the last scan is older than `rescanIntervalHours`. Housekeeping reminders nudge the model to keep the brain fed (sparse cerebrum → `wolf_learn`; empty buglog → `wolf_bug`).
 - **Read interception** — on `tools/post-execute` of `read`: an anatomy hint (`path — summary (~tokens)`), and for files above `symbolThresholdTokens`, the top symbols with **line ranges and per-symbol token estimates** (`main L1-4 ~11 tok`) for `offset`/`limit` reads. Hints are suppressed when the file changed since indexing. Re-reading the same file in one session warns with the earlier token cost. Summaries are **language-aware** (`src/description.ts`): exports summaries, HTTP route detection, zod-schema and JSON-metadata recognition, module docstrings.
-- **Symbol backends** — `symbolBackend: auto | regex | lezer`. `lezer` (default in `auto` when a grammar exists) parses with pure-JS CodeMirror grammars (TypeScript/JS, Python, Go, Rust, Java) and extracts top-level declarations with exact line spans and token costs; `regex` is the dependency-free heuristic fallback.
+- **Symbol backends** — `symbolBackend: auto | regex | lezer`. `lezer` (default in `auto` when a grammar exists) parses with pure-JS CodeMirror grammars (TypeScript/JS, Python, Go, Rust, Java) and extracts top-level declarations with exact line spans and token costs; `regex` is the dependency-free heuristic fallback. The grammars are **optional dependencies**: when one is not installed (e.g. `npm install --omit=optional`), the language silently degrades to regex instead of failing the scan.
 - **Write interception** — `write`/`edit` results are logged to `memory.md`, tracked in session state, and the single changed file is re-analyzed into the cached map.
 - **Compaction survival** — a `compaction/start` snapshot plus a `session-start(source: compact)` restore digest listing files already modified this session.
+- **Bounded session state** — the per-session read/write tracking in `hooks/_session.json` prunes itself on every write: read entries older than 24h are dropped and the written-files log is capped at the most recent 500, so long-lived sessions cannot grow the file forever.
 - **anatomy.md** — `.wolf/anatomy.md` is a human-readable index view kept in sync on every rescan; manual edits are detected by content hash and **absorbed additively** (never clobbered).
 - **Integrity checks** — `wolf_scan` compares the cached index against the filesystem (size/mtime) and the pinned git HEAD, reporting drift for CI or pre-session verification.
-- **Token ledger (measured)** — on every `turn/end` the harness token meter (`ctx.tokenMeter`) measures the session and upserts it into `token-ledger.json` by session id; `wolf_report` shows measured totals.
+- **Token ledger (measured)** — on every `turn/end` the harness token meter (`ctx.tokenMeter`) measures the session and upserts it into `token-ledger.json` by session id; `wolf_report` shows measured totals. The ledger retains at most the 500 most recent session rows (the lifetime unique-session counter keeps counting), so a long-lived profile stays small.
 - **Cross-process lock** — `.wolf/.lock` (exclusive-create + stale-lock steal) serializes read-modify-write updates so concurrent hook fires never lose rows.
 - **Secret hygiene** — `.env`, `.npmrc`, keys, keystores and friends never enter hints or logs.
 
@@ -159,7 +160,19 @@ wolf scan [dir]             # rescan + pin state + render anatomy.md + inject AG
 wolf scan --check [dir]     # verify index vs filesystem (CI-friendly; exit 1 on drift)
 wolf status [dir]           # brain health
 wolf report [dir]           # token ledger summary
+wolf cron add <name> '<expr>' <scan|check> [dir]   # schedule a zero-token task
+wolf cron list|run|remove [dir]
+wolf dashboard [dir]        # local dashboard server (--port, --token, --token-file)
+wolf daemon start [dir]     # dashboard + cron scheduler as a background daemon
+wolf daemon stop [dir]      # stop the daemon
 ```
+
+The dashboard and daemon require a token per request (`?token=` or `Authorization:
+Bearer`). Use `--token=…` for an explicit token, or `--token-file=…` to persist a
+generated token to a file (`chmod 600`) so restarts and external clients share the
+same token without it appearing on the process argv. The dashboard page
+auto-refreshes its active panel every 30s (paused while the tab is hidden or a
+refresh is in flight).
 
 ## With vs without dsh-openwolf
 

@@ -77,13 +77,36 @@ test('logBug + searchBugs round-trip', async () => {
 test('session state read/write', async () => {
   await brain.writeSession({
     session_id: 's1', started: new Date().toISOString(),
-    files_read: { 'src/a.ts': { count: 2, tokens: 100, first_read: 'x' } },
+    files_read: { 'src/a.ts': { count: 2, tokens: 100, first_read: new Date().toISOString() } },
     files_written: [], edit_counts: {}, anatomy_hits: 1, anatomy_misses: 0,
     repeated_reads_warned: 1, cerebrum_warnings: 0,
   })
   const session = await brain.readSession()
   assert.equal(session.files_read['src/a.ts']?.count, 2)
   assert.equal(session.anatomy_hits, 1)
+})
+
+test('writeSession prunes stale read tracking and caps written log', async () => {
+  const old = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+  const fresh = new Date().toISOString()
+  await brain.writeSession({
+    session_id: 'prune', started: fresh,
+    files_read: {
+      'old.ts': { count: 9, tokens: 900, first_read: old },
+      'recent.ts': { count: 1, tokens: 10, first_read: fresh },
+      'bad-date.ts': { count: 1, tokens: 10, first_read: 'not-a-date' },
+    },
+    files_written: Array.from({ length: 520 }, (_, i) => ({ file: `w${i}.ts`, at: fresh })),
+    edit_counts: { 'old.ts': 3, 'recent.ts': 1 },
+    anatomy_hits: 0, anatomy_misses: 0, repeated_reads_warned: 0, cerebrum_warnings: 0,
+  })
+  const session = await brain.readSession()
+  assert.ok(session.files_read['recent.ts'], 'recent read kept')
+  assert.equal(session.files_read['old.ts'], undefined, '>24h read dropped')
+  assert.equal(session.files_read['bad-date.ts'], undefined, 'unparseable read dropped')
+  assert.equal(session.files_written.length, 500, 'written log capped at 500')
+  assert.equal(session.files_written[0]?.file, 'w20.ts', 'oldest writes dropped')
+  assert.equal(session.edit_counts['recent.ts'], 1, 'recent edit count kept')
 })
 
 test('scan state round-trip', async () => {
@@ -117,6 +140,29 @@ test('recordSessionUsage upserts by session id', async () => {
   assert.equal(ledger.sessions.length, 2)
   const s1 = ledger.sessions.find((s) => s.session_id === 'sess-1')
   assert.equal(s1?.measured_tokens, 2500)
+})
+
+test('ledger caps retained rows at 500 while the counter keeps counting', async () => {
+  const capRoot = await mkdtemp(join(tmpdir(), 'openwolf-ledger-cap-'))
+  const b2 = new WolfBrain(capRoot, '.wolf')
+  await b2.ensure()
+  try {
+    for (let i = 0; i < 520; i++) {
+      await b2.recordSessionUsage(`cap-sess-${i}`, undefined, i)
+    }
+    const ledger = await b2.readLedger()
+    assert.equal(ledger.lifetime.total_sessions, 520, 'true unique-session total kept')
+    assert.equal(ledger.sessions.length, 500, 'retained rows capped')
+    assert.equal(ledger.sessions[0]?.session_id, 'cap-sess-20', 'oldest rows dropped')
+    assert.equal(ledger.sessions[499]?.session_id, 'cap-sess-519', 'newest rows kept')
+    // Upserting a still-retained row does not recount it.
+    await b2.recordSessionUsage('cap-sess-519', undefined, 9999)
+    const after = await b2.readLedger()
+    assert.equal(after.lifetime.total_sessions, 520)
+    assert.equal(after.sessions[499]?.measured_tokens, 9999)
+  } finally {
+    await rm(capRoot, { recursive: true, force: true })
+  }
 })
 
 test('withLock serializes concurrent appends (no lost rows)', async () => {

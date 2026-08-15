@@ -356,6 +356,9 @@ This workspace runs a code-map second brain in \`.wolf/\`. Follow this protocol:
 
   // ── token ledger ──────────────────────────────────────────────────────
 
+  /** Hard cap on retained ledger rows; older rows are dropped on write. */
+  private static readonly LEDGER_CAP = 500
+
   /** Upsert a session's usage into the ledger; appends a new entry on first sight. */
   async recordSessionUsage(sessionId: string, agent: string | undefined, measured: number, at?: string): Promise<void> {
     await this.withLock(async () => {
@@ -374,6 +377,12 @@ This workspace runs a code-map second brain in \`.wolf/\`. Follow this protocol:
           measured_tokens: measured,
           at: at ?? new Date().toISOString(),
         })
+      }
+      // Cap the retained rows so a long-lived profile can't grow the ledger
+      // forever. The lifetime counter keeps the true unique-session total; a
+      // session_id dropped here and seen again later recounts as new (rare).
+      if (ledger.sessions.length > WolfBrain.LEDGER_CAP) {
+        ledger.sessions = ledger.sessions.slice(-WolfBrain.LEDGER_CAP)
       }
       await this.writeJSON(join(this.dir, 'token-ledger.json'), ledger)
     })
@@ -521,7 +530,29 @@ This workspace runs a code-map second brain in \`.wolf/\`. Follow this protocol:
   }
 
   async writeSession(state: SessionState): Promise<void> {
-    await this.writeJSON(join(this.dir, 'hooks/_session.json'), state)
+    // Session-state pruning: a long-lived session must not grow the file
+    // forever. Drop read-tracking entries whose first read is older than 24h
+    // (repeated-read warnings only care about the recent window anyway) and
+    // cap the written-files log at the most recent 500 entries.
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    const files_read: SessionState['files_read'] = {}
+    for (const [file, rec] of Object.entries(state.files_read)) {
+      const at = new Date(rec.first_read).getTime()
+      if (!Number.isNaN(at) && at >= cutoff) files_read[file] = rec
+    }
+    const files_written = state.files_written.slice(-500)
+    const edit_counts: SessionState['edit_counts'] = {}
+    for (const [file, count] of Object.entries(state.edit_counts)) {
+      if (files_read[file] !== undefined || state.files_written.some((w) => w.file === file)) {
+        edit_counts[file] = count
+      }
+    }
+    await this.writeJSON(join(this.dir, 'hooks/_session.json'), {
+      ...state,
+      files_read,
+      files_written,
+      edit_counts,
+    })
   }
 
   async readScanState(): Promise<ScanState> {

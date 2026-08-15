@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractSymbolsLezer } from '../src/lezer.ts'
+import { extractSymbolsLezer, markLezerUnavailable } from '../src/lezer.ts'
 import { scanCodebase } from '../src/scanner.ts'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -56,6 +56,32 @@ test('lezer: python / go / rust / java top-level declarations', async () => {
 test('lezer: no grammar for unsupported languages', async () => {
   const hits = await extractSymbolsLezer('def main(): pass\n', 'a.txt', 16)
   assert.deepEqual(hits, [])
+})
+
+test('lezer: missing optional grammar degrades to [] and scanner falls back to regex', async () => {
+  // Simulate the optional dependency not being installed: extraction returns
+  // [] instead of throwing, and a scan still yields symbols via the regex
+  // backend — even with symbolBackend:'lezer' requested explicitly.
+  const restore = markLezerUnavailable('ts')
+  try {
+    const hits = await extractSymbolsLezer('export function greet() { return 1 }\n', 'a.ts', 16)
+    assert.deepEqual(hits, [])
+    const root = await mkdtemp(join(tmpdir(), 'openwolf-lezer-missing-'))
+    await writeFile(join(root, 'a.ts'), 'export function greet() { return 1 }\n')
+    try {
+      const forced = await scanCodebase(root, { ...baseOpts, symbolBackend: 'lezer' })
+      assert.deepEqual(forced.files[0]?.symbols, ['greet'], 'regex fallback still yields symbols')
+      const auto = await scanCodebase(root, { ...baseOpts, symbolBackend: 'auto' })
+      assert.deepEqual(auto.files[0]?.symbols, ['greet'], 'auto backend also falls back')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  } finally {
+    restore()
+  }
+  // After restore the grammar works again.
+  const again = await extractSymbolsLezer('export function greet() { return 1 }\n', 'a.ts', 16)
+  assert.deepEqual(again.map((h) => h.name), ['greet'])
 })
 
 test('backend parity: regex and lezer agree on clean fixtures', async () => {

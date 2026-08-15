@@ -1,8 +1,8 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { main } from '../bin/wolf.mjs'
+import { main, resolveToken } from '../bin/wolf.mjs'
 import { WolfBrain } from '../src/brain.ts'
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -140,4 +140,49 @@ test('init creates OPENWOLF.md protocol', async () => {
   const protocol = await readFile(join(dir, '.wolf/OPENWOLF.md'), 'utf8')
   assert.match(protocol, /Operating Protocol/)
   assert.match(protocol, /wolf_bug/)
+})
+
+test('resolveToken: --token wins over a token file', async () => {
+  const f = join(dir, 'token-win.txt')
+  await writeFile(f, 'file-token', 'utf8')
+  const r = await resolveToken(['--token=explicit', `--token-file=${f}`])
+  assert.equal(r.token, 'explicit')
+  assert.equal(r.tokenFile, undefined)
+})
+
+test('resolveToken: reads an existing token file', async () => {
+  const f = join(dir, 'token-read.txt')
+  await writeFile(f, 'persisted-token', 'utf8')
+  const r = await resolveToken([`--token-file=${f}`])
+  assert.equal(r.token, 'persisted-token')
+  assert.equal(r.tokenFile, f)
+})
+
+test('resolveToken: creates a token file when missing and reuses it later', async () => {
+  const f = join(dir, 'token-create.txt')
+  const r1 = await resolveToken([`--token-file=${f}`])
+  assert.ok(r1.token.length >= 20, 'generated a hex token')
+  assert.equal(r1.tokenFile, f)
+  const onDisk = (await readFile(f, 'utf8')).trim()
+  assert.equal(onDisk, r1.token)
+  const r2 = await resolveToken([`--token-file=${f}`])
+  assert.equal(r2.token, r1.token, 'second call reuses the persisted token')
+})
+
+test('resolveToken: regenerates an empty token file', async () => {
+  const f = join(dir, 'token-empty.txt')
+  await writeFile(f, '   \n', 'utf8')
+  const r = await resolveToken([`--token-file=${f}`])
+  assert.ok(r.token.length >= 20)
+  assert.equal((await readFile(f, 'utf8')).trim(), r.token)
+  const st = await stat(f)
+  assert.ok(st.size > 0)
+})
+
+test('resolveToken: ephemeral random token with no flags', async () => {
+  const a = await resolveToken([])
+  const b = await resolveToken([])
+  assert.ok(a.token.length >= 20)
+  assert.notEqual(a.token, b.token)
+  assert.equal(a.tokenFile, undefined)
 })

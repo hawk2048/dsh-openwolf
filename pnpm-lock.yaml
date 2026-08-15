@@ -30,12 +30,14 @@ specifiers:
 
 dependencies:
   '@deepseek-ai/schemastery': 3.18.1
+  chokidar: 4.0.3
+
+optionalDependencies:
   '@lezer/go': 1.0.1
   '@lezer/java': 1.1.3
   '@lezer/javascript': 1.5.4
   '@lezer/python': 1.1.19
   '@lezer/rust': 1.0.2
-  chokidar: 4.0.3
 
 devDependencies:
   '@deepseek-ai/cordis': 4.0.1_hxi6hciospbebrelewq6b57wvy
@@ -319,58 +321,71 @@ packages:
   /@lezer/common/1.5.2:
     resolution: {integrity: sha512-sxQE460fPZyU3sdc8lafxiPwJHBzZRy/udNFynGQky1SePYBdhkBl1kOagA9uT3pxR8K09bOrmTUqA9wb/PjSQ==}
     dev: false
+    optional: true
 
   /@lezer/go/1.0.1:
     resolution: {integrity: sha512-xToRsYxwsgJNHTgNdStpcvmbVuKxTapV0dM0wey1geMMRc9aggoVyKgzYp41D2/vVOx+Ii4hmE206kvxIXBVXQ==}
+    requiresBuild: true
     dependencies:
       '@lezer/common': 1.5.2
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.10
     dev: false
+    optional: true
 
   /@lezer/highlight/1.2.3:
     resolution: {integrity: sha512-qXdH7UqTvGfdVBINrgKhDsVTJTxactNNxLk7+UMwZhU13lMHaOBlJe9Vqp907ya56Y3+ed2tlqzys7jDkTmW0g==}
     dependencies:
       '@lezer/common': 1.5.2
     dev: false
+    optional: true
 
   /@lezer/java/1.1.3:
     resolution: {integrity: sha512-yHquUfujwg6Yu4Fd1GNHCvidIvJwi/1Xu2DaKl/pfWIA2c1oXkVvawH3NyXhCaFx4OdlYBVX5wvz2f7Aoa/4Xw==}
+    requiresBuild: true
     dependencies:
       '@lezer/common': 1.5.2
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.10
     dev: false
+    optional: true
 
   /@lezer/javascript/1.5.4:
     resolution: {integrity: sha512-vvYx3MhWqeZtGPwDStM2dwgljd5smolYD2lR2UyFcHfxbBQebqx8yjmFmxtJ/E6nN6u1D9srOiVWm3Rb4tmcUA==}
+    requiresBuild: true
     dependencies:
       '@lezer/common': 1.5.2
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.10
     dev: false
+    optional: true
 
   /@lezer/lr/1.4.10:
     resolution: {integrity: sha512-rnCpTIBafOx4mRp43xOxDJbFipJm/c0cia/V5TiGlhmMa+wsSdoGmUN3w5Bqrks/09Q/D4tNAmWaT8p6NRi77A==}
     dependencies:
       '@lezer/common': 1.5.2
     dev: false
+    optional: true
 
   /@lezer/python/1.1.19:
     resolution: {integrity: sha512-MhQIURHRytsNzP/YXnqpYKW6la6voAH3kyplTOOiCdjyFY6cWWGFVmYVdHIPrElqSDf4iCDktQCockB9FxuhzQ==}
+    requiresBuild: true
     dependencies:
       '@lezer/common': 1.5.2
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.10
     dev: false
+    optional: true
 
   /@lezer/rust/1.0.2:
     resolution: {integrity: sha512-Lz5sIPBdF2FUXcWeCu1//ojFAZqzTQNRga0aYv6dYXqJqPfMdCAI0NzajWUd4Xijj1IKJLtjoXRPMvTKWBcqKg==}
+    requiresBuild: true
     dependencies:
       '@lezer/common': 1.5.2
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.10
     dev: false
+    optional: true
 
   /@standard-schema/spec/1.1.0:
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}

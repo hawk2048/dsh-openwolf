@@ -45,7 +45,16 @@ CLI 装好后也可独立使用：
 
 ```sh
 npx wolf init . && npx wolf scan . && npx wolf scan --check .
+npx wolf cron add nightly '30 2 * * *' scan .   # 定时零 token 任务
+npx wolf dashboard .        # 本地仪表盘（--port / --token / --token-file）
+npx wolf daemon start .     # 后台守护：仪表盘 + cron 调度
+npx wolf daemon stop .      # 停止守护
 ```
+
+仪表盘与守护的每个请求都需要 token（`?token=` 或 `Authorization: Bearer`）。用
+`--token=…` 显式指定，或用 `--token-file=…` 把生成的 token 持久化到文件
+（`chmod 600`），重启与外部客户端共享同一 token，且不出现在进程 argv 里。仪表盘
+页面每 30s 自动刷新当前面板（标签页隐藏或刷新进行中时暂停）。
 
 ## 模型看到的工具
 
@@ -77,11 +86,12 @@ npx wolf init . && npx wolf scan . && npx wolf scan --check .
 └── hooks/               # 会话状态、扫描状态（git HEAD 钉住）、压缩前快照
 ```
 
-- **会话摘要** —— `agent/session-start` 时经 `agent.inject()` 注入预算封顶的摘要：STATUS 🚀 下一阶段 → Do-Not-Repeat（最近 10 条）→ 最近 5 个 bug → anatomy 指针；钉住的 git HEAD 移动或上次扫描超过 `rescanIntervalHours` 时，前缀**陈旧警告**。另有**维护提醒**（cerebrum 条目过少 → 用 `wolf_learn`；buglog 为空 → 用 `wolf_bug`）。
+- **会话摘要** —— `agent/session-start` 时经 `agent.inject()` 注入预算封顶的摘要：STATUS 🚀 下一阶段 → Do-Not-Repeat（最近 10 条）→ 最近 5 个 bug → anatomy 指针；钉住的 git HEAD 移动或上次扫描超过 `rescanIntervalHours` 时，前缀**陈旧警告**。各段成本优先用 harness token meter 的启发式（`ctx.tokenMeter.estimateMessage`）计价，不可用时回退字符比，预算行为贴近真实请求前缀。另有**维护提醒**（cerebrum 条目过少 → 用 `wolf_learn`；buglog 为空 → 用 `wolf_bug`）。
 - **读拦截** —— `read` 工具的 `tools/post-execute`：anatomy 提示（`path — summary (~tokens)`）；超过 `symbolThresholdTokens` 的文件给出前 5 个符号的行号，引导 offset/limit 定向读；文件在索引后变过则抑制提示。同会话重复读同一文件会警告并给出此前 token 成本。摘要**语言感知**（`src/description.ts`）：导出摘要、HTTP 路由识别、zod schema 与 JSON 元数据识别、模块 docstring。
 - **写拦截** —— `write`/`edit` 结果写入 `memory.md`、记入会话状态，并把该文件单文件重分析进缓存地图。
 - **压缩幸存** —— `compaction/start` 快照 + `session-start(source: compact)` 恢复摘要（列出本会话已修改文件）。
-- **token 账本（实测）** —— 每个 `turn/end` 用 harness token meter（`ctx.tokenMeter`）测量并按 session_id upsert 进 `token-ledger.json`；`wolf_report` 展示实测总量。
+- **有界会话状态** —— `hooks/_session.json` 的读写跟踪每次写入自剪裁：超过 24h 的读取条目丢弃、写入日志最多保留最近 500 条，长会话不会让文件无限增长。
+- **token 账本（实测）** —— 每个 `turn/end` 用 harness token meter（`ctx.tokenMeter`）测量并按 session_id upsert 进 `token-ledger.json`；`wolf_report` 展示实测总量。账本最多保留最近 500 个会话行（lifetime 去重计数继续累加），长期 profile 保持小巧。
 - **跨进程锁** —— `.wolf/.lock`（独占创建 + 陈旧锁抢占）串行化读改写更新，并发 hook 触发不丢行。
 - **秘密文件卫生** —— `.env`、`.npmrc`、密钥、凭据等绝不进入提示或日志。
 
@@ -151,7 +161,7 @@ harness 自带的 `agent-instructions` 插件本来就会把 `AGENTS.md`（以�
 - **上下文 tokens**：注入的 `AGENTS.md` 地图块（上限 `maxMapBytes`，默认 16 KiB ≈ 4k tokens）随每个会话基线常驻，另有会话摘要（上限 `sessionDigestBudgetTokens`，默认 1500）。两者前缀稳定（KV-cache 友好）。
 - **工作区元数据**：每工作区一个 `.wolf/` 目录（KB 级）+ `AGENTS.md` 内的受管块。秘密文件按设计排除。
 - **hook 在进程内运行**：读提示附加在结果上（`tools/post-execute`——DSH 没有读前拦截缝，提示与结果同达而非严格先于读取）。
-- **符号覆盖**：lezer 覆盖 TS/JS、Python、Go、Rust、Java；其余语言回退正则启发式。
+- **符号覆盖**：lezer 覆盖 TS/JS、Python、Go、Rust、Java；其余语言回退正则启发式。lezer 语法是**可选依赖**：未安装（如 `npm install --omit=optional`）时对应语言静默回退正则，不会让扫描报错。
 - **daemon/CLI 是独立进程**（与原版同架构）——cron/update/dashboard 需要它。
 
 ### 与原版（OpenWolf v2.0.1）的已知差距

@@ -115,4 +115,17 @@ P2 = nice-to-have.
 | CLI `--json` | status/report/scan --check | 机器可读输出 |
 | GitHub Actions CI | node 20/22/24 × ubuntu/windows | install+typecheck+test+pack |
 
-优化优先级更新：**P0 完成（dashboard 缓存、memory 批量、安全套件）**；P1 完成（扫描并发+阈值、git HEAD TTL、CLI --json）；剩余 P1/P2：digest 预算用 tokenMeter、daemon `--token-file`、可选 lezer 依赖、SSE、会话状态剪枝、账本保留上限。
+### v0.7.0-rc.2 优化轮（第二批，2026-08-15）
+
+| 优化 | 实测 / 覆盖 | 结论 |
+| --- | --- | --- |
+| digest 预算用 tokenMeter | `ctx.tokenMeter.estimateMessage` 优先，回退字符比；新增 2 个 mock-estimator 测试 | 预算行为贴近真实请求前缀 |
+| daemon `--token-file` | 生成/读取/复用持久 token（chmod 600），token 不出现在子进程 argv；5 个新单测 | 守护重启与外部客户端共享同一 token |
+| 可选 lezer 依赖 | 5 个语法移入 `optionalDependencies`；缺装时按语言记忆一次失败并回退 regex；新增缺装回退测试 | 体积 ~1MB 变为可选；扫描永不因缺语法崩溃 |
+| dashboard 30s 自动刷新 | 活动面板定时重渲染，标签页隐藏/刷新中暂停；HTML 断言测试 | 长开页面数据自动更新 |
+| 会话状态剪枝 | `files_read` >24h 丢弃、`files_written` 上限 500、`edit_counts` 同步裁剪；新增测试 | 长会话文件有界 |
+| 账本保留上限 | `sessions` 上限 500（lifetime 计数继续累加）；新增 520 会话测试 | 长期 profile 保持小巧 |
+
+复测（v0.7 基线不变）：并发池 50ms vs 串行 85ms → **1.70x**；git HEAD TTL 20 次共 97ms；全部 13 个单测文件（95 例）+ 13 + 27 harness 集成断言通过。
+
+优化优先级更新：**P0 完成（dashboard 缓存、memory 批量、安全套件）**；P1 完成（扫描并发+阈值、git HEAD TTL、CLI --json、**digest tokenMeter、daemon --token-file、可选 lezer、dashboard 自动刷新、会话状态剪枝、账本上限**）；剩余 P2：SSE/live 推送、CHANGELOG、0.x.0 稳定版发布。

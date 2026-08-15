@@ -64,3 +64,11 @@ test('dashboardHtml is self-contained', () => {
   assert.ok(!html.includes('http://'), 'no external assets')
   assert.ok(html.includes('localStorage'), 'token persistence')
 })
+
+test('dashboardHtml has 30s auto-refresh with an in-flight guard', () => {
+  const html = dashboardHtml()
+  assert.ok(html.includes('live · 30s'), 'live badge present')
+  assert.ok(html.includes('setInterval'), 'auto-refresh interval wired')
+  assert.ok(html.includes('document.hidden'), 'paused when the tab is hidden')
+  assert.ok(html.includes('refreshing'), 'no stacked refreshes')
+})

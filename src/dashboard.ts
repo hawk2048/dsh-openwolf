@@ -70,6 +70,7 @@ export function dashboardHtml(): string {
   <a href="#activity" id="nav-activity">activity</a>
   <a href="#cron" id="nav-cron">cron</a>
   <a href="#bugs" id="nav-bugs">bugs</a>
+  <span id="live" class="muted" title="re-renders the active panel every 30s">live · 30s</span>
 </header>
 <main id="main"><section><h2>loading…</h2></section></main>
 <script>
@@ -158,9 +159,10 @@ async function renderBugs() {
   }
   main.appendChild(section('Buglog (' + (d.bugs || []).length + ')', list));
 }
+const PANELS = { '#overview': renderOverview, '#tokens': renderTokens, '#health': renderHealth, '#anatomy': renderAnatomy, '#handoff': renderHandoff, '#activity': renderActivity, '#cron': renderCron, '#bugs': renderBugs };
+let refreshing = false;
 async function boot() {
-  const hash = location.hash;
-  const run = { '#overview': renderOverview, '#tokens': renderTokens, '#health': renderHealth, '#anatomy': renderAnatomy, '#handoff': renderHandoff, '#activity': renderActivity, '#cron': renderCron, '#bugs': renderBugs }[hash] || renderOverview;
+  const run = PANELS[location.hash] || renderOverview;
   try { await run(); } catch (e) {
     main.innerHTML = '';
     main.appendChild(section('error', el('pre', String(e && e.message || e))));
@@ -168,6 +170,13 @@ async function boot() {
 }
 window.addEventListener('hashchange', boot);
 boot();
+// Live view: re-render the active panel every 30s (paused while the tab is
+// hidden or a refresh is already in flight, so slow anatomy scans never stack).
+setInterval(() => {
+  if (document.hidden || refreshing) return;
+  refreshing = true;
+  boot().finally(() => { refreshing = false; });
+}, 30000);
 </script>
 </body>
 </html>

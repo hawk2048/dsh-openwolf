@@ -11,10 +11,10 @@ import { currentGitHead, anatomyStaleReason } from '../lib/digest.js'
 import { startDashboard } from '../lib/dashboard.js'
 import { parseCron, dueTasks, nextMinuteDelay } from '../lib/cron.js'
 import { listProjects, registerProject, unregisterProject, backupBrain, listBackups, restoreBrain } from '../lib/registry.js'
-import { stat, readFile, writeFile, rm } from 'node:fs/promises'
+import { stat, readFile, writeFile, rm, mkdir, chmod } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { join, resolve } from 'node:path'
+import { join, resolve, dirname } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
 
@@ -58,8 +58,9 @@ const USAGE = `usage:
   wolf update                 backup + rescan every registered workspace
   wolf backups [dir]          list timestamped .wolf backups
   wolf restore [dir] [tag]    restore .wolf from a backup (newest by default)
-  wolf dashboard [dir]        local dashboard server (--port, --token)
+  wolf dashboard [dir]        local dashboard server (--port, --token, --token-file)
   wolf daemon start [dir]     dashboard + cron scheduler as a background daemon
+                              (--port, --token, --token-file)
   wolf daemon stop [dir]      stop the daemon`
 
 /** Run one cron action against a workspace. */
@@ -97,6 +98,38 @@ async function runCronAction(dir, action, io) {
 function flag(rest, name, fallback) {
   const hit = rest.find((a) => a.startsWith(`--${name}=`))
   return hit !== undefined ? hit.slice(name.length + 3) : fallback
+}
+
+/**
+ * Resolve the dashboard auth token: `--token=` wins; else `--token-file=`
+ * (read existing, or generate + persist so restarts reuse it); else generate
+ * an ephemeral one. Returns { token, tokenFile } so callers that spawn a child
+ * can hand over the file path instead of leaking the token on argv.
+ */
+export async function resolveToken(rest) {
+  const explicit = flag(rest, 'token', '')
+  if (explicit !== '') return { token: explicit, tokenFile: undefined }
+  const tokenFile = flag(rest, 'token-file', '')
+  if (tokenFile !== '') {
+    let token = ''
+    try {
+      token = (await readFile(tokenFile, 'utf8')).trim()
+    } catch {
+      token = ''
+    }
+    if (token === '') {
+      token = randomBytes(12).toString('hex')
+      await mkdir(dirname(tokenFile), { recursive: true })
+      await writeFile(tokenFile, token, 'utf8')
+      try {
+        await chmod(tokenFile, 0o600)
+      } catch {
+        // chmod is a no-op on some platforms; not fatal
+      }
+    }
+    return { token, tokenFile }
+  }
+  return { token: randomBytes(12).toString('hex'), tokenFile: undefined }
 }
 
 /** Run the CLI. Returns the process exit code. */
@@ -347,7 +380,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
     case 'serve': {
       // dashboard + cron scheduler loop (used by `daemon start`).
       await brain.ensure()
-      const token = flag(rest, 'token', randomBytes(12).toString('hex'))
+      const { token } = await resolveToken(rest)
       const port = Number(flag(rest, 'port', '3310'))
       const server = await startDashboard({ brain, token, port })
       io.out(`dashboard: ${server.url}/?token=${token}`)
@@ -380,7 +413,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
     }
     case 'dashboard': {
       await brain.ensure()
-      const token = flag(rest, 'token', randomBytes(12).toString('hex'))
+      const { token } = await resolveToken(rest)
       const port = Number(flag(rest, 'port', '3310'))
       const server = await startDashboard({ brain, token, port })
       io.out(`dashboard: ${server.url}/?token=${token}`)
@@ -400,13 +433,15 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
           return 1
         }
         await daemonBrain.ensure()
-        const token = flag(restAfter, 'token', randomBytes(12).toString('hex'))
+        const { token, tokenFile } = await resolveToken(restAfter)
         const port = Number(flag(restAfter, 'port', '3310'))
-        const child = spawn(
-          process.execPath,
-          [fileURLToPath(import.meta.url), 'serve', daemonDir, `--port=${port}`, `--token=${token}`],
-          { detached: true, stdio: 'ignore' },
-        )
+        const childArgs = [fileURLToPath(import.meta.url), 'serve', daemonDir, `--port=${port}`]
+        if (tokenFile !== undefined) {
+          childArgs.push(`--token-file=${tokenFile}`)
+        } else {
+          childArgs.push(`--token=${token}`)
+        }
+        const child = spawn(process.execPath, childArgs, { detached: true, stdio: 'ignore' })
         child.unref()
         await writeFile(pidPath, String(child.pid), 'utf8')
         io.out(`daemon started (pid ${child.pid}) — dashboard: http://127.0.0.1:${port}/?token=${token}`)

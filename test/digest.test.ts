@@ -75,3 +75,26 @@ test('buildSessionDigestWithWarning prepends the staleness warning', async () =>
   assert.match(digest, /anatomy may be stale/)
   assert.match(digest, /Next phase/)
 })
+
+test('buildSessionDigest honors a caller-supplied estimator', async () => {
+  await brain.writeStatus('# STATUS\n\n## 🚀 Next phase\n\n' + 'y'.repeat(40) + '\n')
+  // A tiny budget by any estimate admits nothing.
+  const tight = await buildSessionDigest(brain, 50, (text) => text.length)
+  assert.equal(tight, '')
+  // Char-ratio (~4 chars/token) admits the 40-char section within 100 tokens…
+  const loose = await buildSessionDigest(brain, 100)
+  assert.match(loose, /Next phase/)
+  // …but a greedy estimator that prices every char as 10 tokens drops it.
+  const greedy = await buildSessionDigest(brain, 100, (text) => text.length * 10)
+  assert.equal(greedy, '')
+})
+
+test('buildSessionDigestWithWarning passes the estimator through', async () => {
+  await brain.writeStatus('# STATUS\n\n## 🚀 Next phase\n\nsmall\n')
+  await brain.writeScanState({ last_scanned: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), git_head: 'abc' })
+  // Greedy estimator: the section does not fit the budget; only the
+  // (unbudgeted) staleness warning remains.
+  const digest = await buildSessionDigestWithWarning(brain, 100, 6, (text) => text.length * 10)
+  assert.match(digest, /anatomy may be stale/)
+  assert.doesNotMatch(digest, /Next phase/)
+})

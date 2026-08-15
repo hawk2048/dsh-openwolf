@@ -34,6 +34,31 @@ const LOADERS: Record<string, () => Promise<unknown>> = {
   kt: () => import('@lezer/java').then((m: { parser: unknown }) => m.parser),
 }
 
+/**
+ * Languages whose grammar import already failed this process. Grammars are
+ * optional dependencies, so a missing one must degrade to the regex backend —
+ * once, not per file (failed dynamic imports are slow to re-attempt).
+ */
+const failedLoaders = new Set<string>()
+
+/** Loader for a language, or undefined when the grammar is unavailable. */
+function loaderFor(lang: string): (() => Promise<unknown>) | undefined {
+  if (failedLoaders.has(lang)) return undefined
+  return LOADERS[lang]
+}
+
+/**
+ * Test hook: simulate the grammar for a language being unavailable (as when
+ * the optional dependency is not installed) so callers can verify the regex
+ * fallback. Returns a cleanup that restores the loader.
+ */
+export function markLezerUnavailable(lang: string): () => void {
+  failedLoaders.add(lang)
+  return () => {
+    failedLoaders.delete(lang)
+  }
+}
+
 /** Whether a lezer grammar exists for this file's language tag. */
 export function lezerAvailableFor(relPath: string): boolean {
   return detectLang(relPath) in LOADERS
@@ -146,13 +171,21 @@ function collectTopLevel(root: unknown, text: string, lineStarts: number[], max:
 
 /**
  * Extract symbols with the lezer backend for a file, or [] when no grammar
- * exists for its language.
+ * exists for its language (or the optional grammar is not installed — the
+ * caller then falls back to the regex backend).
  */
 export async function extractSymbolsLezer(text: string, relPath: string, max: number): Promise<LezerSymbolHit[]> {
   const lang = detectLang(relPath)
-  const loader = LOADERS[lang]
+  const loader = loaderFor(lang)
   if (loader === undefined) return []
-  const parser = (await loader()) as ParserLike
+  let parser: ParserLike
+  try {
+    parser = (await loader()) as ParserLike
+  } catch {
+    // Optional dependency not installed: remember and fall back to regex.
+    failedLoaders.add(lang)
+    return []
+  }
   const tree = parser.parse(text)
   const lineStarts = [0]
   for (let i = 0; i < text.length; i++) {
