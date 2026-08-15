@@ -95,8 +95,8 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 
 ### P3 — Platform (v0.5+) — ✅ FULLY SHIPPED (0.5.0-rc.2)
 - ✅ Skills (G1/G2): `wolf-security-audit` (4-layer audit → severity report → buglog) and `wolf-reframe` (13-framework KB + anti-generic mandate) registered into `ctx.skills`
-- ✅ CLI (H3): `wolf` binary — init/scan/`scan --check`/status/report, standalone (reuses the library); `--check` persists a file manifest and exits 1 on drift
-- ✅ Dashboard (H1): zero-dep local dashboard server (127.0.0.1 + timing-safe token auth, deep-linkable panels) — tokens (ledger), context health (scan/git HEAD/staleness/digest budget), anatomy browser, STATUS.md handoff, buglog; `wolf dashboard` + `wolf daemon start|stop`
+- ✅ CLI (H3): `dshwolf` binary (alias `wolf`) — init/scan/`scan --check`/status/report, standalone (reuses the library); `--check` persists a file manifest and exits 1 on drift
+- ✅ Dashboard (H1): zero-dep local dashboard server (127.0.0.1 + timing-safe token auth, deep-linkable panels) — tokens (ledger), context health (scan/git HEAD/staleness/digest budget), anatomy browser, STATUS.md handoff, buglog; `dshwolf dashboard` + `dshwolf daemon start|stop`
 - ✅ Auto-rescan (H2-lite): `autoRescanMinutes` refreshes cached roots on an unref'd timer
 
 **→ The full OpenWolf v2.0.1 feature set (A1-A7, B1-B8, C1-C3, E-H) is now replicated as a native DSH plugin, including the completion pass: P0 0.2.0-rc.1 · P1 0.3.0-rc.2 · P2 0.4.0-rc.1 · P3 0.5.0-rc.2 · P4 (completion) 0.6.0-rc.1 (latest).**

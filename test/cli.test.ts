@@ -25,7 +25,7 @@ after(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-test('wolf init creates the brain', async () => {
+test('dshwolf init creates the brain', async () => {
   out = ''
   const code = await main(['init', dir], io)
   assert.equal(code, 0)
@@ -33,7 +33,7 @@ test('wolf init creates the brain', async () => {
   await assert.rejects(() => readFile(join(dir, '.wolf/config.json'), 'utf8').then(() => Promise.reject(new Error('missing'))), /missing/)
 })
 
-test('wolf scan builds the index and pins state', async () => {
+test('dshwolf scan builds the index and pins state', async () => {
   out = ''
   const code = await main(['scan', dir], io)
   assert.equal(code, 0)
@@ -44,7 +44,7 @@ test('wolf scan builds the index and pins state', async () => {
   assert.match(anatomy, /src\/app\.ts/)
 })
 
-test('wolf scan --check is fresh, then detects drift after edits', async () => {
+test('dshwolf scan --check is fresh, then detects drift after edits', async () => {
   out = ''
   let code = await main(['scan', '--check', dir], io)
   assert.equal(code, 0)
@@ -58,7 +58,7 @@ test('wolf scan --check is fresh, then detects drift after edits', async () => {
   assert.match(err, /src\/app\.ts/)
 })
 
-test('wolf status and report are healthy', async () => {
+test('dshwolf status and report are healthy', async () => {
   out = ''
   assert.equal(await main(['status', dir], io), 0)
   assert.match(out, /digestBudget=1500/)
@@ -234,7 +234,7 @@ test('resolveToken: ephemeral random token with no flags', async () => {
   assert.equal(a.tokenFile, undefined)
 })
 
-test('wolf harness status lists profiles and wiring', async () => {
+test('dshwolf harness status lists profiles and wiring', async () => {
   const profiles = await mkdtemp(join(tmpdir(), 'openwolf-profiles-'))
   await mkdir(join(profiles, 'web'), { recursive: true })
   await mkdir(join(profiles, 'headless'), { recursive: true })
@@ -262,7 +262,7 @@ test('wolf harness status lists profiles and wiring', async () => {
   }
 })
 
-test('wolf harness add wires the plugin into a profile', async () => {
+test('dshwolf harness add wires the plugin into a profile', async () => {
   const profiles = await mkdtemp(join(tmpdir(), 'openwolf-profiles-add-'))
   await mkdir(join(profiles, 'cli'), { recursive: true })
   await writeFile(join(profiles, 'cli/package.json'), JSON.stringify({
@@ -292,7 +292,7 @@ test('wolf harness add wires the plugin into a profile', async () => {
   }
 })
 
-test('wolf harness add rejects an unknown profile', async () => {
+test('dshwolf harness add rejects an unknown profile', async () => {
   const profiles = await mkdtemp(join(tmpdir(), 'openwolf-profiles-bad-'))
   const oldEnv = process.env.DSH_WOLF_PROFILES_DIR
   process.env.DSH_WOLF_PROFILES_DIR = profiles
