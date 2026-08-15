@@ -16,7 +16,7 @@
   <a href="https://www.npmjs.com/package/dsh-openwolf"><img src="https://img.shields.io/npm/dm/dsh-openwolf?color=2ea44f&label=downloads" alt="npm downloads" /></a>
   <a href="https://github.com/hawk2048/dsh-openwolf/stargazers"><img src="https://img.shields.io/github/stars/hawk2048/dsh-openwolf?color=444&label=stars" alt="GitHub stars" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-2ea44f" alt="Node.js" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20.19-2ea44f" alt="Node.js" /></a>
 </p>
 
 <p align="center">
