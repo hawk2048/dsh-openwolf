@@ -29,7 +29,7 @@
   <a href="CHANGELOG.md"><b>Changelog</b></a>
 </p>
 
-English | [中文](README.zh.md)
+English | [中文](README-zh.md)
 
 ---
 
