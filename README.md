@@ -24,7 +24,17 @@ dsh plugin --profile web add ./path/to/dsh-openwolf
 dsh plugin --profile web add github:hawk2048/dsh-openwolf
 ```
 
-Restart the profile (`dsh web`). The bundle layer inserts one host row that registers the service and the three tools for every session.
+**Install by talking to DeepSeek Harness** — the agent can install it for you.
+Start a session (or any agent) and say, for example:
+
+> 帮我把 dsh-openwolf 插件装进当前 profile（`dsh plugin --profile web add dsh-openwolf`），然后重启生效。
+
+The harness has shell access, so it will run the `dsh plugin` command for you,
+then tell you to restart `dsh web`. This works from the Web GUI or the
+`headless` profile (`dsh --profile headless "install dsh-openwolf"`).
+
+Restart the profile (`dsh web`). The bundle layer inserts one host row that
+registers the tools, skills, and hooks for every session.
 
 Installing from a git URL pulls **source**, not build output, so the first `add` fails until you authorize the package's build in the profile's `pnpm-workspace.yaml`:
 
@@ -34,6 +44,12 @@ allowBuilds:
 ```
 
 then re-run `add`. Installing from npm or a tarball needs no authorization.
+
+The CLI is also standalone once the package is installed anywhere:
+
+```sh
+npx wolf init . && npx wolf scan . && npx wolf scan --check .
+```
 
 ## What the model sees
 
@@ -185,6 +201,50 @@ What the plugin changes for an agent session in this workspace, and the honest t
 - **Dashboard is a server-rendered single page** (zero deps) with a panel subset,
   not a React SPA; the description extractor is a compact port of the
   reference's larger heuristic.
+
+## Token impact (measured)
+
+We ran a controlled A/B in DeepSeek Harness: the identical task ("read
+`src/app.ts`, list its functions, add `createUser2` that calls `createUser`")
+on identical 3-file fixtures, once **with** the plugin and once on a bare
+profile. Usage is the provider-reported total (input + output + cache
+reads/writes) summed from the session logs:
+
+| Run | Steps | Reads | Edits | Billed tokens |
+| --- | --- | --- | --- | --- |
+| with dsh-openwolf | 3 | 1 | 1 | 39,164 |
+| without | 3 | 1 | 1 | 35,488 |
+| **delta** | | | | **+3,676 (+10%)** |
+
+**Reading this honestly**: on a minimal one-read task the plugin is a *net
+overhead* — its fixed costs dominate. The mechanism that saves tokens
+(avoiding re-reads, offset/limit reads, map-first navigation) only pays off
+once a session reads multiple files or re-reads the same file.
+
+### Cost structure (what the plugin adds)
+
+| Component | Per | Size |
+| --- | --- | --- |
+| Session digest (+ housekeeping reminder) | session start | ≤ 1,500 tokens (config) |
+| `AGENTS.md` map block (when `injectAgentsMd`) | session baseline | ≤ `maxMapBytes` (16 KiB ≈ 4k tokens) |
+| 10 `wolf_*` tool schemas | **every request** | ≈ 1–2k tokens (KV-cache prefix-stable) |
+| 2 skill catalog entries | session baseline | ≈ 100 tokens |
+
+### Where savings come from
+
+| Mechanism | Saves | When it matters |
+| --- | --- | --- |
+| Repeated-read warning | ~1 whole-file read (~2k tokens) per catch | sessions that re-read files |
+| Symbol line-range hints | offset/limit read instead of whole file | big files (>500 tokens) |
+| Map-first navigation | N whole-file reads → 1 map read | multi-file exploration |
+| Compaction survival | re-done work after compaction | long sessions |
+
+The reference project's own field data (heuristic estimates): **~65.8%
+average token reduction across 20 projects / 132 sessions, with 71% of
+repeated file reads caught**, and ~80% on its test project (425K vs 2.5M
+tokens). Expect the plugin to **break even once a session touches a handful
+of files or runs long**; for one-shot tiny tasks, consider
+`digestEnabled: false` / `injectAgentsMd: false` / a smaller `maxMapBytes`.
 
 ## Development
 

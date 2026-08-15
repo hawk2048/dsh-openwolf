@@ -24,7 +24,13 @@ dsh plugin --profile web add ./path/to/dsh-openwolf
 dsh plugin --profile web add github:hawk2048/dsh-openwolf
 ```
 
-重启 profile（`dsh web`）。bundle 层会插入一行 host 插件，为每个会话注册上述三个工具。
+**直接跟 DeepSeek Harness 对话安装**——让 agent 帮你装。开一个会话（或任意 agent），直接说：
+
+> 帮我把 dsh-openwolf 插件装进当前 profile（`dsh plugin --profile web add dsh-openwolf`），然后重启生效。
+
+harness 有 shell 权限，agent 会替你执行 `dsh plugin` 命令并提示重启 `dsh web`。Web GUI 或 `headless` profile（`dsh --profile headless "install dsh-openwolf"`）都能这么装。
+
+重启 profile（`dsh web`）。bundle 层会插入一行 host 插件，为每个会话注册工具、技能与钩子。
 
 从 git URL 安装拉取的是**源码而非构建产物**，首次 `add` 会失败，需要先在 profile 的 `pnpm-workspace.yaml` 里授权构建：
 
@@ -34,6 +40,12 @@ allowBuilds:
 ```
 
 然后重新执行 `add`。从 npm 或 tarball 安装则无需任何授权。
+
+CLI 装好后也可独立使用：
+
+```sh
+npx wolf init . && npx wolf scan . && npx wolf scan --check .
+```
 
 ## 模型看到的工具
 
@@ -147,6 +159,38 @@ harness 自带的 `agent-instructions` 插件本来就会把 `AGENTS.md`（以�
 - **多 agent 接线 N/A**——原版钩 5 个外部 agent（Claude Code/Codex/OpenCode/Gemini/Cursor）；DSH 本身是 agent 平台，一个大脑服务所有 DSH 会话与子代理。
 - **未桥接 `dsh-schedule`**——cron 引擎为自研独立实现（每次运行 0 token），而非 harness 的模型面向调度器。
 - **dashboard 是零依赖服务器渲染单页**（面板子集），非 React SPA；描述提取器是原版大启发式的紧凑移植。
+
+## Token 影响（实测）
+
+我们在 DeepSeek Harness 里做了受控 A/B：同一任务（"读 `src/app.ts`，列出函数，新增调用 `createUser` 的 `createUser2`"）、同一份 3 文件工作区，一次**带插件**、一次在裸 profile 上运行。用量为 provider 实测合计（input+output+cache 读写，从会话日志汇总）：
+
+| 运行 | 步数 | 读取 | 编辑 | 计费 tokens |
+| --- | --- | --- | --- | --- |
+| 带 dsh-openwolf | 3 | 1 | 1 | 39,164 |
+| 不带 | 3 | 1 | 1 | 35,488 |
+| **差值** | | | | **+3,676（+10%）** |
+
+**诚实解读**：在"单次读取"的最小任务上，插件是**净开销**——固定成本占优。省 token 的机制（避免重复读、offset/limit 定向读、地图优先导航）要等会话读多个文件或重复读同一文件时才兑现。
+
+### 成本结构（插件新增了什么）
+
+| 组件 | 频次 | 大小 |
+| --- | --- | --- |
+| 会话摘要（+维护提醒） | 会话开始 | ≤ 1,500 tokens（可配） |
+| `AGENTS.md` 地图块（`injectAgentsMd` 开启时） | 会话基线 | ≤ `maxMapBytes`（16 KiB ≈ 4k tokens） |
+| 10 个 `wolf_*` 工具 schema | **每个请求** | ≈ 1–2k tokens（KV-cache 前缀稳定） |
+| 2 条技能目录条目 | 会话基线 | ≈ 100 tokens |
+
+### 省在哪
+
+| 机制 | 节省 | 何时生效 |
+| --- | --- | --- |
+| 重复读警告 | 每次拦下一次整文件读（~2k tokens） | 会话重复读文件时 |
+| 符号行号提示 | offset/limit 定向读代替整文件 | 大文件（>500 tokens） |
+| 地图优先导航 | N 次整文件读 → 1 次地图读 | 多文件探索 |
+| 压缩幸存 | 压缩后不再重做已完成工作 | 长会话 |
+
+原版项目自身的字段数据（启发式估算）：**20 个项目 / 132 会话平均 ~65.8% token 下降，拦下 71% 的重复读**，其测试项目 ~80%（425K vs 2.5M tokens）。预期：**会话触及多个文件或足够长时回本**；一次性小任务可考虑 `digestEnabled: false` / `injectAgentsMd: false` / 调小 `maxMapBytes`。
 
 ## 开发
 
