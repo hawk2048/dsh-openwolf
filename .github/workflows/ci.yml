@@ -11,9 +11,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        # node 20 cannot run the .ts test files (type stripping needs 22.6+);
-        # 22/24 both support `node --test` globs + native TS.
-        node: [22, 24]
+        # Match the local dev environment: Node 24 only. (node 20 cannot run
+        # the .ts test files — type stripping needs 22.6+.)
+        node: [24]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
