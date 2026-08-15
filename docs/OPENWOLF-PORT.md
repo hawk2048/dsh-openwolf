@@ -99,11 +99,19 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 - ✅ Dashboard (H1): zero-dep local dashboard server (127.0.0.1 + timing-safe token auth, deep-linkable panels) — tokens (ledger), context health (scan/git HEAD/staleness/digest budget), anatomy browser, STATUS.md handoff, buglog; `wolf dashboard` + `wolf daemon start|stop`
 - ✅ Auto-rescan (H2-lite): `autoRescanMinutes` refreshes cached roots on an unref'd timer
 
-**→ The full OpenWolf v2.0.1 feature set (A1-A7, B1-B8, C1-C3, E-H) is now replicated as a native DSH plugin. All phases shipped: P0 0.2.0-rc.1 · P1 0.3.0-rc.2 · P2 0.4.0-rc.1 · P3 0.5.0-rc.2 (latest).**
+**→ The full OpenWolf v2.0.1 feature set (A1-A7, B1-B8, C1-C3, E-H) is now replicated as a native DSH plugin, including the completion pass: P0 0.2.0-rc.1 · P1 0.3.0-rc.2 · P2 0.4.0-rc.1 · P3 0.5.0-rc.2 · P4 (completion) 0.6.0-rc.1 (latest).**
+
+### P4 — Completion pass (v0.6) ✅ SHIPPED (0.6.0-rc.1)
+- ✅ Cron system (H2): zero-dep 5-field parser/matcher, durable tasks (`.wolf/cron-tasks.json`), CLI `cron add/list/run/remove`, daemon `serve` runs due tasks every minute
+- ✅ Project registry + update/restore: `~/.dsh-wolf-registry.json` (env-overridable), `register`/`unregister`/`update` (backup + rescan every project)/`backups`/`restore [tag]` (timestamped rollback)
+- ✅ `bug search` CLI; `OPENWOLF.md` operating protocol generated on init
+- ✅ Dashboard panels completed: overview / activity timeline / cron status (plus tokens/health/anatomy/handoff/bugs)
+- ✅ Symbol read hints sorted by token size (top-5, OpenWolf parity)
+- ✅ Tests: 76 unit + 36 integration
 
 ### Not replicated (documented deltas)
 - **Multi-agent wiring (D)** — OpenWolf hooks five EXTERNAL agents (Claude Code/Codex/OpenCode/Gemini/Cursor). DSH is the agent platform itself, so this is N/A by design: one brain serves every DSH session/subagent.
-- **Full `dsh-schedule` cron integration (H2)** — auto-rescan uses an unref'd host timer; model-driven durable schedules via `dsh-schedule` are deferred (they need agent-scoped scheduling UX).
+- **Full `dsh-schedule` integration (H2)** — the cron engine is the plugin's own (daemon-driven); the harness's model-facing `dsh-schedule` (agent-scoped durable schedules with UI) is a separate surface that a future iteration could bridge.
 
 ## 4. Research items before implementation
 
