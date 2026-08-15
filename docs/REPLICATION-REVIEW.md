@@ -128,4 +128,12 @@ P2 = nice-to-have.
 
 复测（v0.7 基线不变）：并发池 50ms vs 串行 85ms → **1.70x**；git HEAD TTL 20 次共 97ms；全部 13 个单测文件（95 例）+ 13 + 27 harness 集成断言通过。
 
-优化优先级更新：**P0 完成（dashboard 缓存、memory 批量、安全套件）**；P1 完成（扫描并发+阈值、git HEAD TTL、CLI --json、**digest tokenMeter、daemon --token-file、可选 lezer、dashboard 自动刷新、会话状态剪枝、账本上限**）；剩余 P2：SSE/live 推送、CHANGELOG、0.x.0 稳定版发布。
+### v0.8.0 稳定版（第三批，2026-08-15）
+
+| 项目 | 实测 / 覆盖 | 结论 |
+| --- | --- | --- |
+| dashboard SSE `/api/events` | mtime 轮询（2s）检测 8 个 brain 文件变化 → 向所有 SSE 客户端推送 `refresh`；浏览器 EventSource 优先、30s 轮询回退（SSE 断开时自动恢复）；3 个新测试（含真实推送端到端） | 页面在 brain 文件一变即更新，无需等待轮询 |
+| CHANGELOG | 0.1.0 → 0.8.0 完整历史（added/changed/fixed），tag 链接与 git tags 一一对应 | 发布历史可追溯 |
+| 稳定版 0.8.0 | 去掉 `-rc` 后缀的首次 0.x.0 稳定发布 | 复刻 23/23 完成后的收敛点 |
+
+优化优先级更新：**P0 全部完成**；**P1 全部完成**（含本批 SSE）；**P2 完成（CHANGELOG、0.8.0 稳定版）**。backlog 清空——后续仅按需迭代（如新语言语法、更多 dashboard 面板）。

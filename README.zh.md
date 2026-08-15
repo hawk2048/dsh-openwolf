@@ -54,7 +54,8 @@ npx wolf daemon stop .      # 停止守护
 仪表盘与守护的每个请求都需要 token（`?token=` 或 `Authorization: Bearer`）。用
 `--token=…` 显式指定，或用 `--token-file=…` 把生成的 token 持久化到文件
 （`chmod 600`），重启与外部客户端共享同一 token，且不出现在进程 argv 里。仪表盘
-页面每 30s 自动刷新当前面板（标签页隐藏或刷新进行中时暂停）。
+页面是**实时**的：通过 SSE（`/api/events`）在 brain 文件一变就重渲染当前面板，
+流断开时回退到 30s 轮询（标签页隐藏或刷新进行中时暂停）。
 
 ## 模型看到的工具
 

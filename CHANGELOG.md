@@ -1,0 +1,184 @@
+# Changelog
+
+All notable changes to **dsh-openwolf** are tracked here. The project follows a
+`0.x.0` minor-release cadence; `rc` builds are released to the `rc` npm tag and
+promoted to `latest` when verified. Version history follows
+[Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
+
+## [0.8.0] — 2026-08-15
+
+First stable `0.x.0` release (no `-rc` suffix). OpenWolf v2.0.1 feature
+replication is complete (23/23, see `docs/OPENWOLF-PORT.md`).
+
+### Added
+
+- **Dashboard Server-Sent Events (`/api/events`)** — the dashboard now pushes
+  `refresh` events the moment a watched brain file (`token-ledger.json`,
+  `memory.md`, `STATUS.md`, `buglog.json`, `cron-tasks.json`, `anatomy-index.json`,
+  session/scan state) changes on disk. The client uses `EventSource` for
+  near-instant updates and keeps the 30s poll as a fallback when the stream
+  drops (the poll stops while SSE is live and resumes on error).
+- **`CHANGELOG.md`** — this file.
+
+### Changed
+
+- **Session-digest budget pricing** — section costs are now priced with the
+  harness token meter's heuristic (`ctx.tokenMeter.estimateMessage`) when
+  available, falling back to the char-ratio estimator otherwise, so the digest
+  budget behaves like the real request prefix.
+- **Lezer grammars are optional** — the five `@lezer/*` grammars moved from
+  `dependencies` to `optionalDependencies`. A missing grammar (e.g.
+  `npm install --omit=optional`) now silently degrades that language to the
+  regex backend instead of failing the scan; the failure is remembered per
+  language so it is only attempted once per process.
+- **Session-state pruning** — `hooks/_session.json` prunes itself on every
+  write: read-tracking entries older than 24h are dropped and the written-files
+  log is capped at the most recent 500 entries (edit counts follow), so
+  long-lived sessions cannot grow the file forever.
+- **Token-ledger cap** — `token-ledger.json` retains at most the 500 most
+  recent session rows; the lifetime unique-session counter keeps counting, so
+  long-lived profiles stay small while totals remain true.
+
+### Added (CLI)
+
+- **`wolf daemon start --token-file=…` / `wolf dashboard --token-file=…`** —
+  persist a generated auth token to a file (created `chmod 600`, reused on
+  restart) so the daemon and external clients share one token without it
+  appearing on the process argv.
+
+## [0.7.0] — 2026-08-15
+
+Optimization round (measured on a 200-file fixture, see
+`docs/REPLICATION-REVIEW.md`).
+
+### Added
+
+- **Concurrent scan pool** — file analysis runs across 8 workers: 55ms vs 94ms
+  sequential (**1.71x**).
+- **Lezer symbol threshold** — files below `symbolThresholdTokens` (default
+  500) skip the CPU-bound CST parse and use the regex backend: 161ms → 55ms
+  overall (**2.9x**), aligning with OpenWolf's "index symbols only above 500
+  tokens" behavior.
+- **git HEAD TTL cache** — HEAD lookups cached 30s: 20 lookups in 80ms instead
+  of ~1.2s.
+- **memory.md batching** — memory rows buffer and flush at ≥16 rows or ≥2s,
+  turning burst writes into one disk write.
+- **CLI `--json`** — `wolf status`, `wolf report`, `wolf scan --check` support
+  machine-readable JSON output.
+- **GitHub Actions CI** — node 20/22/24 × ubuntu/windows:
+  install + typecheck + test + pack sanity.
+
+## [0.6.0] — 2026-08-14
+
+Replication P4 + B1 + F — full OpenWolf feature replication (23/23).
+
+### Added
+
+- **Cron engine** — zero-dependency 5-field parser with `@` shorthands and
+  month/weekday names, minute-anchored scheduling, in-flight guard, durable
+  tasks in `.wolf/cron-tasks.json`; `wolf cron add|list|run|remove` CLI.
+- **`wolf_schedule` tool** — 0-token model-driven cron registration (a
+  deliberate divergence from dsh-schedule, which burns an LLM turn per trigger).
+- **Project registry** — `~/.dsh-wolf-registry.json` (env-overridable for
+  tests), `wolf register|unregister|update`, timestamped backups,
+  `wolf backups|restore`.
+- **Durable anatomy index** — `anatomy-index.json` incremental refresh
+  (re-analyze only drifted files) + `wolf_scan` integrity checks (size/mtime vs
+  manifest, pinned git HEAD).
+- **Security regression suite** — secret denylist (`.env*` + keys/keystores,
+  template exemptions), path-traversal, timing-safe auth, cron file-access
+  guards; the suite caught and fixed two real indexing bugs.
+- **`OPENWOLF.md`** — the operating-protocol doc, written on `wolf init`.
+
+## [0.5.0] — 2026-08-13
+
+Replication P3 — standalone surface + dashboard.
+
+### Added
+
+- **Standalone CLI** — the `wolf` binary works without a running harness:
+  `init`, `scan` (+`--check`), `status`, `report`, `bug search`.
+- **Dashboard server** — zero-dependency `node:http` server bound to
+  127.0.0.1 with timing-safe token auth (`?token=` or `Authorization: Bearer`);
+  panels: overview, tokens, context health, anatomy, handoff, activity, bugs.
+- **Daemon** — `wolf daemon start|stop`: dashboard + cron scheduler as a
+  detached background process.
+- **Auto-rescan** — `autoRescanMinutes` keeps cached roots fresh without tool
+  calls.
+- **Bundled skills** — `wolf-security-audit` and `wolf-reframe` register into
+  the harness skill catalog (`skillsEnabled`).
+
+## [0.4.0] — 2026-08-12
+
+Replication P2 — symbol intelligence + integrity.
+
+### Added
+
+- **Lezer symbol backend** — pure-JS CodeMirror grammars (TS/JS, Python, Go,
+  Rust, Java) extract top-level declarations with exact start/end lines and
+  per-symbol token estimates; `symbolBackend: auto | regex | lezer` with
+  backend-parity tests.
+- **`wolf_scan` tool** — integrity check comparing the cached index against
+  the filesystem (size/mtime) and the pinned git HEAD.
+- **`anatomy.md`** — human-readable index view kept in sync on every rescan;
+  manual edits are content-hash detected and absorbed additively.
+
+## [0.3.0] — 2026-08-11
+
+Replication P1 — measured token ledger + hardening.
+
+### Added
+
+- **Measured token ledger** — per-session measured usage upserted into
+  `token-ledger.json` from provider-reported usage on `assistant/message`
+  (web long-lived sessions never fire `turn/end`), with `ctx.tokenMeter`
+  fallback; `wolf_report` shows measured totals.
+- **Session housekeeping reminders** — nudge the model to use `wolf_learn`
+  (sparse cerebrum) and `wolf_bug` (empty buglog).
+- **Cross-process lock** — `.wolf/.lock` with stale-lock steal serializes
+  read-modify-write updates so concurrent hook fires never lose rows.
+- **Language-aware descriptions** — export summaries, HTTP route detection,
+  zod-schema/JSON-metadata recognition, module docstrings.
+
+## [0.2.0] — 2026-08-10
+
+Replication P0 — the OpenWolf-class context core.
+
+### Added
+
+- **`.wolf/` brain** per workspace: `config.json`, `STATUS.md`, `cerebrum.md`,
+  `memory.md`, `buglog.json`, token ledger, session/scan state.
+- **Session digest** — on `agent/session-start`, a budget-capped digest
+  (STATUS 🚀 next phase → Do-Not-Repeat last 10 → recent 5 bugs → anatomy
+  pointer) injected via `agent.inject()`, with a git-HEAD staleness warning.
+- **Read interception** — `tools/post-execute` on `read`: anatomy hints
+  (summary + token estimate), symbol line ranges for `offset`/`limit` reads,
+  repeated-read warnings with prior token cost.
+- **Write interception** — `write`/`edit` results logged to `memory.md`,
+  tracked in session state, single-file index refresh.
+- **Compaction survival** — `compaction/start` snapshot + restore digest on
+  `session-start(source: compact)`.
+- **Secret hygiene** — `.env`, `.npmrc`, keys, keystores never enter hints or
+  logs.
+
+## [0.1.0] — 2026-08-09
+
+Initial release.
+
+### Added
+
+- **Compact code-map plugin** for DeepSeek Harness: pre-indexed project maps,
+  per-file digests, AGENTS.md managed-block injection, `wolf_map`,
+  `wolf_file`, `wolf_refresh` tools.
+- chokidar watcher with debounced rescans; workspace resolution from the
+  agent's session `cwd`; cache per workspace root.
+- Bilingual README (EN + zh).
+
+[0.8.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.0
+[0.7.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.7.0-rc.2
+[0.6.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.6.0-rc.3
+[0.5.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.5.0-rc.2
+[0.4.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.4.0-rc.1
+[0.3.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.3.0-rc.2
+[0.2.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.2.0-rc.1
+[0.1.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.1.0

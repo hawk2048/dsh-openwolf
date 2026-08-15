@@ -170,9 +170,10 @@ wolf daemon stop [dir]      # stop the daemon
 The dashboard and daemon require a token per request (`?token=` or `Authorization:
 Bearer`). Use `--token=…` for an explicit token, or `--token-file=…` to persist a
 generated token to a file (`chmod 600`) so restarts and external clients share the
-same token without it appearing on the process argv. The dashboard page
-auto-refreshes its active panel every 30s (paused while the tab is hidden or a
-refresh is in flight).
+same token without it appearing on the process argv. The dashboard page is live:
+it opens an SSE stream (`/api/events`) and re-renders the active panel the moment
+a brain file changes, with a 30s poll as fallback when the stream drops (paused
+while the tab is hidden or a refresh is in flight).
 
 ## With vs without dsh-openwolf
 

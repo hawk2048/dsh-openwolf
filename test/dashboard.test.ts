@@ -72,3 +72,38 @@ test('dashboardHtml has 30s auto-refresh with an in-flight guard', () => {
   assert.ok(html.includes('document.hidden'), 'paused when the tab is hidden')
   assert.ok(html.includes('refreshing'), 'no stacked refreshes')
 })
+
+test('dashboardHtml prefers Server-Sent Events with a poll fallback', () => {
+  const html = dashboardHtml()
+  assert.ok(html.includes("new EventSource('/api/events?token='"), 'SSE wired with token')
+  assert.ok(html.includes("sse.addEventListener('refresh', refreshNow)"), 'refresh event handled')
+  assert.ok(html.includes('sse.onopen = stopPoll'), 'poll stops once SSE is live')
+  assert.ok(html.includes('sse.onerror = startPoll'), 'poll resumes on SSE drop')
+})
+
+test('dashboard SSE pushes a refresh event when a brain file changes', async () => {
+  const ac = new AbortController()
+  const res = await fetch(`${server.url}/api/events?token=secret123`, { signal: ac.signal })
+  assert.equal(res.status, 200)
+  assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/)
+  const reader = res.body?.getReader()
+  assert.ok(reader, 'streaming body available')
+  const decoder = new TextDecoder()
+  // Let the server prime its mtime map, then touch a watched brain file
+  // (buglog.json) and expect a push.
+  await new Promise((r) => setTimeout(r, 2500))
+  await brain.logBug('sse-live-test', 'verified')
+  const timeout = new Promise<null>((r) => setTimeout(() => r(null), 6000))
+  const collect = (async (): Promise<string | null> => {
+    let buf = ''
+    for (;;) {
+      const { done, value } = await reader!.read()
+      if (done) return null
+      buf += decoder.decode(value, { stream: true })
+      if (buf.includes('event: refresh')) return buf
+    }
+  })()
+  const out = await Promise.race([collect, timeout])
+  ac.abort()
+  assert.ok(out !== null && out.includes('event: refresh'), 'refresh event pushed after a brain change')
+})

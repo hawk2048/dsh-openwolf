@@ -8,9 +8,11 @@
  * @module dsh-openwolf/dashboard
  */
 
-import { createServer, type Server } from 'node:http'
+import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
+import { stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { WolfBrain } from './brain.ts'
 import { scanCodebase, refreshMapFromIndex } from './scanner.ts'
 import { currentGitHead, anatomyStaleReason } from './digest.ts'
@@ -170,13 +172,27 @@ async function boot() {
 }
 window.addEventListener('hashchange', boot);
 boot();
-// Live view: re-render the active panel every 30s (paused while the tab is
-// hidden or a refresh is already in flight, so slow anatomy scans never stack).
-setInterval(() => {
+// Live view: prefer Server-Sent Events (instant refresh when brain files
+// change); fall back to a 30s poll if the SSE stream cannot connect. Both
+// pause while the tab is hidden or a refresh is in flight.
+function refreshNow() {
   if (document.hidden || refreshing) return;
   refreshing = true;
   boot().finally(() => { refreshing = false; });
-}, 30000);
+}
+let pollTimer = null;
+function startPoll() {
+  if (pollTimer) return;
+  pollTimer = setInterval(refreshNow, 30000);
+}
+function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+let sse = null;
+try {
+  sse = new EventSource('/api/events?token=' + encodeURIComponent(TOKEN));
+  sse.addEventListener('refresh', refreshNow);
+  sse.onopen = stopPoll; // SSE is live; the poll is only a fallback
+  sse.onerror = startPoll; // connection dropped → poll covers; EventSource reconnects on its own
+} catch (e) { sse = null; startPoll(); }
 </script>
 </body>
 </html>
@@ -205,9 +221,41 @@ export interface DashboardServer {
   close: () => Promise<void>
 }
 
+/** Brain files whose changes should push a live `refresh` event. */
+const WATCHED_BRAIN_FILES = [
+  'token-ledger.json', 'memory.md', 'STATUS.md', 'buglog.json',
+  'cron-tasks.json', 'anatomy-index.json', 'hooks/_session.json', 'hooks/_scan-state.json',
+]
+
+/** Brain-file mtime poll interval (the SSE push backend). */
+const SSE_POLL_MS = 2_000
+
 /** Start the dashboard server. Resolves once listening. */
 export async function startDashboard(options: DashboardOptions): Promise<DashboardServer> {
   const { brain, token, host = '127.0.0.1', port = 3310 } = options
+  const sseClients = new Set<ServerResponse>()
+  const brainMtimes = new Map<string, number>()
+  // Poll the small set of brain files and push a refresh event to every open
+  // SSE client whenever an mtime changes (zero-dep change detection).
+  const pollBrain = async (): Promise<void> => {
+    for (const rel of WATCHED_BRAIN_FILES) {
+      let mtime = 0
+      try {
+        mtime = (await stat(join(brain.dir, rel))).mtimeMs
+      } catch {
+        mtime = 0
+      }
+      if (brainMtimes.get(rel) !== mtime) {
+        brainMtimes.set(rel, mtime)
+        if (mtime > 0 && sseClients.size > 0) {
+          const data = JSON.stringify({ at: new Date().toISOString(), file: rel })
+          for (const client of sseClients) client.write(`event: refresh\ndata: ${data}\n\n`)
+        }
+      }
+    }
+  }
+  const sseTimer = setInterval(() => { void pollBrain() }, SSE_POLL_MS)
+  sseTimer.unref?.() // the listening socket keeps the process alive; never block exit
   const server: Server = createServer(async (req, res) => {
     const respond = (code: number, body: unknown, contentType = 'application/json') => {
       res.writeHead(code, { 'content-type': contentType, 'cache-control': 'no-store' })
@@ -272,6 +320,19 @@ export async function startDashboard(options: DashboardOptions): Promise<Dashboa
       if (pathname === '/api/cron') {
         return respond(200, { tasks: await brain.readCronTasks() })
       }
+      if (pathname === '/api/events') {
+        // Server-Sent Events: keep the connection open and push `refresh`
+        // events when any watched brain file changes on disk.
+        res.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-store',
+          connection: 'keep-alive',
+        })
+        res.write('retry: 2000\n\n') // tell the client to reconnect fast after drops
+        sseClients.add(res)
+        req.on('close', () => sseClients.delete(res))
+        return
+      }
       return respond(404, { error: 'not found' })
     } catch (err) {
       respond(500, { error: err instanceof Error ? err.message : String(err) })
@@ -285,6 +346,18 @@ export async function startDashboard(options: DashboardOptions): Promise<Dashboa
   return {
     port: addr.port,
     url: `http://${host}:${addr.port}`,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    close: () =>
+      new Promise<void>((resolve) => {
+        clearInterval(sseTimer)
+        for (const client of sseClients) {
+          try {
+            client.end()
+          } catch {
+            // already closed
+          }
+        }
+        sseClients.clear()
+        server.close(() => resolve())
+      }),
   }
 }
