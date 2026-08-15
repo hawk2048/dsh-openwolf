@@ -85,12 +85,15 @@ That is it. There is nothing to initialize and nothing to configure: on the
 first session the plugin scans the workspace once, keeps the map fresh from
 then on, and works underneath — use the harness exactly as you always have.
 
-**Even simpler: just ask the harness to do it.** Start a session and say:
+**Don't want to touch a terminal? Ask the harness.** Copy this into any
+session (Web GUI or headless) — the agent installs the plugin and restarts
+for you:
 
-> 帮我把 dsh-openwolf 装进当前 profile，然后重启生效。
+> Install the dsh-openwolf plugin into my current profile, then restart the harness so it takes effect.
 
-The agent runs the `dsh plugin` command for you and tells you when to restart.
-Works from the Web GUI or the `headless` profile.
+The agent runs `dsh plugin --profile web add dsh-openwolf`, restarts, and
+confirms when it's live. (Or say the same thing in your own words — the
+agent understands intent, not exact phrasing.)
 
 **Option B — install it standalone (CLI only, no harness).** The package is
 also a plain npm package: install it anywhere and the `wolf` CLI works on its

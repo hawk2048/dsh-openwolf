@@ -73,12 +73,13 @@ dsh web                                      # 重启（或重启 GUI）
 就这么简单。**无需初始化、无需配置**：第一个会话里插件扫描一次工作区，此后
 保持地图新鲜，在底层默默工作——harness 照常用，没有任何流程改动。
 
-**更简单：直接让 harness 帮你装。** 开一个会话，说：
+**不想敲命令？让 agent 帮你装。** 把下面这句复制进任意会话（Web GUI 或
+headless 都行），agent 会替你安装并重启：
 
-> 帮我把 dsh-openwolf 装进当前 profile，然后重启生效。
+> 帮我把 dsh-openwolf 装进当前 profile，然后重启让它生效。
 
-agent 会替你执行 `dsh plugin` 命令并提示何时重启。Web GUI 或 `headless`
-profile 都能这么装。
+agent 会执行 `dsh plugin --profile web add dsh-openwolf`、重启，然后确认
+装好了。（用自己的话表达也可以——agent 理解意图，不挑措辞。）
 
 **方式 B —— 独立安装（仅 CLI，不依赖 harness）。** 本包也是普通 npm 包：
 装在任何地方，`wolf` CLI 即可独立使用（init / scan / status / report /

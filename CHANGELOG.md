@@ -5,6 +5,17 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.5] — 2026-08-15
+
+### Changed (docs)
+
+- **Conversational install wording** — replaced the stilted "start a session
+  and say…" instruction with the copy-paste-prompt pattern used by mainstream
+  open-source projects (e.g. MCP server READMEs): a quoted, copyable prompt
+  the user can drop straight into any session, plus what the agent will do
+  ("installs the plugin and restarts for you"). The agent understands intent,
+  not exact phrasing, so users are told they can reword it freely.
+
 ## [0.8.4] — 2026-08-15
 
 ### Changed (docs)
@@ -218,6 +229,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.5]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.5
 [0.8.4]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.4
 [0.8.3]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.3
 [0.8.2]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.2
