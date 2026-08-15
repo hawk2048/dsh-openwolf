@@ -93,14 +93,17 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 - ✅ Post-write incremental updates (B7): single-file re-analysis now keeps per-directory aggregates in sync
 - ✅ Tests: +lezer golden/parity, +anatomy render/absorb, +dirs aggregates, +wolf_scan drift (54 unit + 36 integration); published as `dsh-openwolf@0.4.0-rc.1` and promoted to `latest`
 
-### P3 — Platform (v0.5+) — phase 1 ✅ SHIPPED (0.5.0-rc.1)
+### P3 — Platform (v0.5+) — ✅ FULLY SHIPPED (0.5.0-rc.2)
 - ✅ Skills (G1/G2): `wolf-security-audit` (4-layer audit → severity report → buglog) and `wolf-reframe` (13-framework KB + anti-generic mandate) registered into `ctx.skills`
 - ✅ CLI (H3): `wolf` binary — init/scan/`scan --check`/status/report, standalone (reuses the library); `--check` persists a file manifest and exits 1 on drift
+- ✅ Dashboard (H1): zero-dep local dashboard server (127.0.0.1 + timing-safe token auth, deep-linkable panels) — tokens (ledger), context health (scan/git HEAD/staleness/digest budget), anatomy browser, STATUS.md handoff, buglog; `wolf dashboard` + `wolf daemon start|stop`
 - ✅ Auto-rescan (H2-lite): `autoRescanMinutes` refreshes cached roots on an unref'd timer
-- ⏳ Dashboard (H1) — deferred to P3 phase 2 (DSH client plugin over web slots)
 
-### P3 phase 2 (dashboard) — proposed scope
-- DSH client plugin (`dsh-openwolf/client`) registering web slots: token usage panel (ledger + tokenMeter), context health (scan freshness/git HEAD/digest budget), anatomy browser with per-file symbols, session handoff (STATUS), cron control
+**→ The full OpenWolf v2.0.1 feature set (A1-A7, B1-B8, C1-C3, E-H) is now replicated as a native DSH plugin. All phases shipped: P0 0.2.0-rc.1 · P1 0.3.0-rc.2 · P2 0.4.0-rc.1 · P3 0.5.0-rc.2 (latest).**
+
+### Not replicated (documented deltas)
+- **Multi-agent wiring (D)** — OpenWolf hooks five EXTERNAL agents (Claude Code/Codex/OpenCode/Gemini/Cursor). DSH is the agent platform itself, so this is N/A by design: one brain serves every DSH session/subagent.
+- **Full `dsh-schedule` cron integration (H2)** — auto-rescan uses an unref'd host timer; model-driven durable schedules via `dsh-schedule` are deferred (they need agent-scoped scheduling UX).
 
 ## 4. Research items before implementation
 
