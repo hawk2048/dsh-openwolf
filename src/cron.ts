@@ -24,6 +24,45 @@ const FIELDS: Array<{ name: string; min: number; max: number }> = [
   { name: 'dow', min: 0, max: 7 }, // 0 and 7 both mean Sunday
 ]
 
+/** Month name → number (case-insensitive). */
+const MONTH_NAMES: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+}
+
+/** Weekday name → number (case-insensitive). */
+const DOW_NAMES: Record<string, number> = {
+  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+}
+
+/** `@` shorthands (like crontab). */
+const SHORTHANDS: Record<string, string> = {
+  '@yearly': '0 0 1 1 *',
+  '@annually': '0 0 1 1 *',
+  '@monthly': '0 0 1 * *',
+  '@weekly': '0 0 * * 0',
+  '@daily': '0 0 * * *',
+  '@midnight': '0 0 * * *',
+  '@hourly': '0 * * * *',
+}
+
+/** Replace month/weekday names (and name ranges) with numbers in one field. */
+function normalizeNames(field: string, table: Record<string, number>): string {
+  return field
+    .split(',')
+    .map((part) => {
+      const range = part.match(/^([a-zA-Z]{3})-([a-zA-Z]{3})$/)
+      if (range !== null) {
+        const lo = table[range[1]!.toLowerCase()]
+        const hi = table[range[2]!.toLowerCase()]
+        if (lo !== undefined && hi !== undefined) return `${lo}-${hi}`
+      }
+      const name = table[part.trim().toLowerCase()]
+      return name !== undefined ? String(name) : part
+    })
+    .join(',')
+}
+
 /** Parse one comma-separated field into a set of allowed values. */
 function parseField(field: string, min: number, max: number): Set<number> {
   const out = new Set<number>()
@@ -52,19 +91,30 @@ function parseField(field: string, min: number, max: number): Set<number> {
 
 /** Parse a 5-field cron expression (minute hour day-of-month month day-of-week). */
 export function parseCron(expr: string): CronExpr {
+  const trimmed = expr.trim()
+  if (SHORTHANDS[trimmed.toLowerCase()] !== undefined) {
+    expr = SHORTHANDS[trimmed.toLowerCase()]!
+  }
   const parts = expr.trim().split(/\s+/)
   if (parts.length !== 5) throw new Error(`cron needs 5 fields, got ${parts.length}: ${expr}`)
   const [minute, hour, dom, month, dow] = parts
   if (minute === undefined || hour === undefined || dom === undefined || month === undefined || dow === undefined) {
     throw new Error(`invalid cron: ${expr}`)
   }
+  const monthN = normalizeNames(month, MONTH_NAMES)
+  const dowN = normalizeNames(dow, DOW_NAMES)
   return {
     minute: parseField(minute, FIELDS[0]!.min, FIELDS[0]!.max),
     hour: parseField(hour, FIELDS[1]!.min, FIELDS[1]!.max),
     dom: parseField(dom, FIELDS[2]!.min, FIELDS[2]!.max),
-    month: parseField(month, FIELDS[3]!.min, FIELDS[3]!.max),
-    dow: parseField(dow, FIELDS[4]!.min, FIELDS[4]!.max),
+    month: parseField(monthN, FIELDS[3]!.min, FIELDS[3]!.max),
+    dow: parseField(dowN, FIELDS[4]!.min, FIELDS[4]!.max),
   }
+}
+
+/** Milliseconds until the next minute boundary (timer anchoring). */
+export function nextMinuteDelay(now = new Date()): number {
+  return (60 - now.getSeconds()) * 1000 - now.getMilliseconds()
 }
 
 /** Whether a Date matches an expression (dom/dow use OR semantics, like cron). */

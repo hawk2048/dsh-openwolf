@@ -9,7 +9,7 @@ import { scanCodebase } from '../lib/scanner.js'
 import { injectBlock } from '../lib/render.js'
 import { currentGitHead, anatomyStaleReason } from '../lib/digest.js'
 import { startDashboard } from '../lib/dashboard.js'
-import { parseCron, dueTasks } from '../lib/cron.js'
+import { parseCron, dueTasks, nextMinuteDelay } from '../lib/cron.js'
 import { listProjects, registerProject, unregisterProject, backupBrain, listBackups, restoreBrain } from '../lib/registry.js'
 import { stat, readFile, writeFile, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -327,20 +327,30 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       const port = Number(flag(rest, 'port', '3310'))
       const server = await startDashboard({ brain, token, port })
       io.out(`dashboard: ${server.url}/?token=${token}`)
+      const running = new Set()
       const runDue = async () => {
         const tasks = await brain.readCronTasks()
         for (const task of dueTasks(tasks, new Date())) {
+          if (running.has(task.id)) continue // never overlap a long run
+          running.add(task.id)
           try {
             const { ok, detail } = await runCronAction(dir, task.action, io)
             await brain.recordCronRun(task.id, ok ? 'ok' : 'error', detail)
           } catch (e) {
             await brain.recordCronRun(task.id, 'error', e instanceof Error ? e.message : String(e))
+          } finally {
+            running.delete(task.id)
           }
         }
       }
       await runDue()
-      const tick = setInterval(() => { void runDue() }, 60_000)
-      tick.unref?.()
+      // Minute-anchored wake: compute the exact delay to the next minute
+      // boundary so `dueTasks` never misses a window and never double-runs.
+      const arm = () => {
+        const tick = setTimeout(() => { void runDue().finally(arm) }, nextMinuteDelay())
+        tick.unref?.()
+      }
+      arm()
       await new Promise(() => {})
       return 0
     }

@@ -128,6 +128,16 @@ ok(refresh2.isError !== true, 'wolf_refresh for anatomy sync')
 const anatomy = await readFile(join(fixture, '.wolf/anatomy.md'), 'utf8')
 ok(anatomy.includes('# Anatomy') && anatomy.includes('Files:'), 'anatomy.md rendered')
 
+// 12. wolf_schedule registers a zero-token cron task.
+const sched = await call('wolf_schedule', { add_name: 'nightly-scan', add_expr: '@daily', add_action: 'scan' })
+ok(sched.isError !== true && sched.value?.report.includes('scheduled'), 'wolf_schedule adds a task')
+const cronFile = JSON.parse(await readFile(join(fixture, '.wolf/cron-tasks.json'), 'utf8'))
+ok(cronFile.tasks.length === 1 && cronFile.tasks[0]?.expr === '@daily', 'cron task persisted')
+const schedList = await call('wolf_schedule', {})
+ok(schedList.value?.tasks?.length === 1, 'wolf_schedule lists tasks')
+const schedRm = await call('wolf_schedule', { remove_id: cronFile.tasks[0]?.id })
+ok(schedRm.value?.report.includes('removed'), 'wolf_schedule removes a task')
+
 console.log(`\n${pass} integration assertions passed`)
 await rm(fixture, { recursive: true, force: true })
 process.exit(0)

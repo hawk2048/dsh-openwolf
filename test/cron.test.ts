@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseCron, cronMatches, dueTasks, type CronTask } from '../src/cron.ts'
+import { parseCron, cronMatches, dueTasks, nextMinuteDelay, type CronTask } from '../src/cron.ts'
 
 test('parseCron handles stars, steps, ranges, lists', () => {
   assert.doesNotThrow(() => parseCron('* * * * *'))
@@ -51,4 +51,24 @@ test('dueTasks guards per-minute reruns', () => {
   assert.equal(dueTasks([{ ...base, last_run: new Date(2026, 7, 15, 2, 29).toISOString() }], now).length, 1, 'ran last minute')
   assert.equal(dueTasks([{ ...base, enabled: false }], now).length, 0, 'disabled')
   assert.equal(dueTasks([{ ...base, expr: 'bogus' }], now).length, 0, 'invalid expr skipped')
+})
+
+test('parseCron supports @ shorthands and month/weekday names', () => {
+  assert.deepEqual(parseCron('@daily'), parseCron('0 0 * * *'))
+  assert.deepEqual(parseCron('@hourly'), parseCron('0 * * * *'))
+  assert.deepEqual(parseCron('@weekly'), parseCron('0 0 * * 0'))
+  assert.deepEqual(parseCron('@monthly'), parseCron('0 0 1 * *'))
+  assert.deepEqual(parseCron('@yearly'), parseCron('0 0 1 1 *'))
+  const names = parseCron('0 9 * JAN MON-FRI')
+  assert.ok(names.month.has(1) && !names.month.has(2))
+  assert.ok(names.dow.has(1) && names.dow.has(5) && !names.dow.has(6))
+  const lower = parseCron('0 9 * jan sun')
+  assert.ok(lower.month.has(1) && lower.dow.has(0))
+})
+
+test('nextMinuteDelay targets the next minute boundary', () => {
+  const d = new Date(2026, 7, 15, 2, 30, 15, 250)
+  assert.equal(nextMinuteDelay(d), 44_750)
+  const e = new Date(2026, 7, 15, 2, 30, 0, 0)
+  assert.equal(nextMinuteDelay(e), 60_000)
 })

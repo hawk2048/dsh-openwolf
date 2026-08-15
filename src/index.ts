@@ -32,6 +32,7 @@ import { injectBlock, renderMap } from './render.ts'
 import { WolfBrain, isSensitiveFile } from './brain.ts'
 import { buildSessionDigestWithWarning, buildSessionDigest, currentGitHead, anatomyStaleReason } from './digest.ts'
 import { bundledSkills } from './skills.ts'
+import { parseCron } from './cron.ts'
 import type { CodeMap, FileEntry, ScanOptions, SymbolBackend } from './types.ts'
 
 /** Plugin display name used in diagnostics. */
@@ -977,6 +978,96 @@ export function apply(ctx: Context, config: Config) {
       }
     },
   }))
+
+  ctx.tools.register(defineTool({
+    name: 'wolf_schedule',
+    description:
+      'Schedule a zero-token recurring task (scan or check) in .wolf/cron-tasks.json. The daemon executes it on schedule without any LLM call per run. Use for unattended maintenance: map refreshes, integrity checks.',
+    parameters: {
+      add_name: { type: 'string', description: 'When adding: task name.' },
+      add_expr: { type: 'string', description: 'When adding: 5-field cron expression or @daily/@hourly/@weekly/@monthly/@yearly.' },
+      add_action: { type: 'string', description: 'When adding: scan or check.' },
+      remove_id: { type: 'string', description: 'When removing: the task id to delete.' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          tasks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                id: { type: 'string', required: true },
+                name: { type: 'string', required: true },
+                expr: { type: 'string', required: true },
+                action: { type: 'string', required: true },
+                enabled: { type: 'boolean', required: true },
+                last_run: { type: 'string' },
+                last_status: { type: 'string' },
+              },
+            },
+            required: true,
+          },
+          report: { type: 'string', required: true },
+        },
+      },
+      render: (_args, value) => [{ type: 'text', text: value.report }],
+    },
+    async execute(args, exec) {
+      const root = resolveWorkspace(exec)
+      const brain = await brainOf(root)
+      if (brain === null) throw new Error('brain is disabled (brainEnabled=false)')
+      if (typeof args.remove_id === 'string' && args.remove_id !== '') {
+        const removed = await brain.removeCronTask(args.remove_id)
+        const tasks = await brain.readCronTasks()
+        return {
+          tasks: tasks.map(summarizeTask),
+          report: removed ? `removed ${args.remove_id}` : `no such task: ${args.remove_id}`,
+        }
+      }
+      if (typeof args.add_name === 'string' && typeof args.add_expr === 'string') {
+        const action = args.add_action === 'check' ? 'check' : 'scan'
+        parseCron(args.add_expr) // validate; throws → tool error
+        const id = `task-${Date.now().toString(36)}`
+        await brain.upsertCronTask({
+          id,
+          name: args.add_name,
+          expr: args.add_expr,
+          action,
+          enabled: true,
+          created_at: new Date().toISOString(),
+        })
+        const tasks = await brain.readCronTasks()
+        return {
+          tasks: tasks.map(summarizeTask),
+          report: `scheduled ${id} (${args.add_name}: ${args.add_expr} → ${action}). The daemon runs it with zero token cost per run.`,
+        }
+      }
+      const tasks = await brain.readCronTasks()
+      return {
+        tasks: tasks.map(summarizeTask),
+        report: tasks.length === 0
+          ? 'no cron tasks scheduled'
+          : tasks.map((t) => `- ${t.id} ${t.name} "${t.expr}" ${t.action}${t.last_run !== undefined ? ` · last ${t.last_run.slice(0, 16)} ${t.last_status ?? ''}` : ''}`).join('\n'),
+      }
+    },
+  }))
+}
+
+/** Project a cron task to the tool's JSON shape. */
+function summarizeTask(t: { id: string; name: string; expr: string; action: string; enabled: boolean; last_run?: string; last_status?: string }) {
+  return {
+    id: t.id,
+    name: t.name,
+    expr: t.expr,
+    action: t.action,
+    enabled: t.enabled,
+    ...(t.last_run !== undefined ? { last_run: t.last_run } : {}),
+    ...(t.last_status !== undefined ? { last_status: t.last_status } : {}),
+  }
 }
 
 /** True when a cached file entry matches the on-disk file (hint freshness). */
