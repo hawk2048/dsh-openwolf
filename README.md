@@ -397,6 +397,9 @@ Every command also exists as a session tool (`wolf_map`, `wolf_file`,
 `wolf_bug`, `wolf_report`, `wolf_schedule`) — the model can do all of this
 itself, so the CLI is only for humans, scripts, and cron.
 
+Global flags: `wolf --help` (grouped usage) and `wolf --version` work
+anywhere; a bare `wolf` also prints the help.
+
 ## Requirements
 
 - Node.js 20+

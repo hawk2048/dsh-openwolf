@@ -74,6 +74,27 @@ test('unknown command prints usage and exits 2', async () => {
   assert.match(err, /usage:/)
 })
 
+test('--help / -h / bare invocation print grouped usage and exit 0', async () => {
+  for (const args of [['--help'], ['-h'], []]) {
+    out = ''
+    err = ''
+    assert.equal(await main(args, io), 0)
+    assert.match(out, /usage: wolf <command>/)
+    assert.match(out, /Brain lifecycle/)
+    assert.match(out, /Memory & bugs/)
+    assert.match(out, /Scheduling & serving/)
+    assert.match(out, /Registry & backups/)
+    assert.match(out, /Harness wiring/)
+    assert.match(out, /--version/)
+  }
+})
+
+test('--version prints the package version and exits 0', async () => {
+  out = ''
+  assert.equal(await main(['--version'], io), 0)
+  assert.match(out, /wolf \d+\.\d+\.\d+ \(dsh-openwolf\)/)
+})
+
 test('cron add/list/run/remove round-trip', async () => {
   out = ''
   assert.equal(await main(['cron', 'add', 'nightly', '30 2 * * *', 'scan', dir], io), 0)

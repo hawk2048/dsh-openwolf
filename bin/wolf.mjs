@@ -43,28 +43,42 @@ function resolveDir(argv) {
   return last !== undefined ? resolve(process.cwd(), last) : process.cwd()
 }
 
-const USAGE = `usage:
-  wolf init [dir]             initialize .wolf/ brain
-  wolf scan [dir]             rescan + pin state + render anatomy.md + inject AGENTS.md
-  wolf scan --check [dir]     verify index vs filesystem (CI-friendly; exit 1 on drift)
-  wolf status [dir]           brain health: config, scan state, ledger, memory/buglog
-  wolf report [dir]           token ledger summary
-  wolf bug search <term>      search the buglog
-  wolf cron add <name> '<expr>' <scan|check> [dir]
-  wolf cron list [dir]        list scheduled tasks
-  wolf cron run <id> [dir]    run one task now
-  wolf cron remove <id> [dir]
-  wolf register [dir]         add workspace to the global registry
-  wolf unregister [dir]       remove workspace from the registry
-  wolf update                 backup + rescan every registered workspace
-  wolf backups [dir]          list timestamped .wolf backups
-  wolf restore [dir] [tag]    restore .wolf from a backup (newest by default)
-  wolf dashboard [dir]        local dashboard server (--port, --token, --token-file)
-  wolf daemon start [dir]     dashboard + cron scheduler as a background daemon
-                              (--port, --token, --token-file)
-  wolf daemon stop [dir]      stop the daemon
-  wolf harness status         check which DSH profiles have dsh-openwolf wired
-  wolf harness add [name]     wire dsh-openwolf into a DSH profile (default: web)`
+const USAGE = `usage: wolf <command> [args]
+
+  Brain lifecycle
+    wolf init [dir]               initialize .wolf/ brain
+    wolf scan [dir]               rescan + pin state + render anatomy.md + inject AGENTS.md
+    wolf scan --check [dir]       verify index vs filesystem (CI-friendly; exit 1 on drift)
+    wolf status [dir]             brain health: config, scan state, ledger, memory/buglog
+    wolf report [dir]             token ledger summary
+
+  Memory & bugs
+    wolf bug search <term>        search the buglog
+
+  Scheduling & serving
+    wolf cron add <name> '<expr>' <scan|check> [dir]
+    wolf cron list [dir]          list scheduled tasks
+    wolf cron run <id> [dir]      run one task now
+    wolf cron remove <id> [dir]
+    wolf dashboard [dir]          local dashboard server (--port, --token, --token-file)
+    wolf daemon start [dir]       dashboard + cron scheduler as a background daemon
+                                  (--port, --token, --token-file)
+    wolf daemon stop [dir]        stop the daemon
+
+  Registry & backups
+    wolf register [dir]           add workspace to the global registry
+    wolf unregister [dir]         remove workspace from the registry
+    wolf update                   backup + rescan every registered workspace
+    wolf backups [dir]            list timestamped .wolf backups
+    wolf restore [dir] [tag]      restore .wolf from a backup (newest by default)
+
+  Harness wiring (standalone installs)
+    wolf harness status           list DSH profiles and whether dsh-openwolf is wired
+    wolf harness add [name]       wire dsh-openwolf into a DSH profile (default: web)
+
+Options:
+  -h, --help                      show this help
+  -v, --version                   print version`
 
 /** Run one cron action against a workspace. */
 async function runCronAction(dir, action, io) {
@@ -138,6 +152,18 @@ export async function resolveToken(rest) {
 /** Run the CLI. Returns the process exit code. */
 export async function main(argv = [], io = { out: console.log, err: console.error }) {
   const [cmd, ...rest] = argv
+
+  // Global flags (OpenWolf-style: help/version work anywhere).
+  if (cmd === '-h' || cmd === '--help' || (cmd === undefined && argv.length === 0)) {
+    io.out(USAGE)
+    return 0
+  }
+  if (cmd === '-v' || cmd === '--version') {
+    const ownVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
+    io.out(`wolf ${ownVersion} (dsh-openwolf)`)
+    return 0
+  }
+
   const dir = resolveDir(rest)
   const brain = new WolfBrain(dir, '.wolf')
 

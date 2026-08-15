@@ -5,6 +5,17 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.7] — 2026-08-15
+
+### Added
+
+- **OpenWolf-style CLI ergonomics** — `wolf --help` / `-h` (grouped usage) and
+  `wolf --version` / `-v` now work anywhere, and a bare `wolf` prints the
+  help. The usage text is reorganized into the same grouping pattern as
+  OpenWolf's Commander help (Brain lifecycle / Memory & bugs / Scheduling &
+  serving / Registry & backups / Harness wiring), so the full command surface
+  is discoverable without reading the README.
+
 ## [0.8.6] — 2026-08-15
 
 ### Added
@@ -249,6 +260,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.7]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.7
 [0.8.6]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.6
 [0.8.5]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.5
 [0.8.4]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.4

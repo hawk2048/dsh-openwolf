@@ -351,6 +351,9 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 `wolf_report`、`wolf_schedule`）——模型自己能做这一切，CLI 只是给人、脚本和
 cron 用的。
 
+全局选项：`wolf --help`（分组帮助）与 `wolf --version` 随处可用；裸 `wolf`
+也打印帮助。
+
 ## 环境要求
 
 - Node.js 20+
