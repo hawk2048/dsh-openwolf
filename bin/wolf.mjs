@@ -598,32 +598,32 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
         doc.dsh.profile = doc.dsh.profile ?? { bundles: [] }
         if (!doc.dsh.profile.bundles.includes('dsh-openwolf')) doc.dsh.profile.bundles.push('dsh-openwolf')
         await writeFile(pkgPath, JSON.stringify(doc, null, 2) + '\n', 'utf8')
-        io.out(`wired dsh-openwolf@${ownVersion} into profile '${profileName}'`)
         const profileDir = join(profilesDir, profileName)
         if (noInstall) {
-          io.out(`next: cd ${profileDir} && pnpm install, then restart the harness`)
+          io.out(`✓ dsh-openwolf@${ownVersion} wired into profile '${profileName}' (run pnpm install in ${profileDir} to finish)`)
           return 0
         }
         // One-command wiring: install the dependency inside the profile too,
         // mirroring `openwolf init --agent` doing the whole setup in one shot.
-        io.out(`installing into ${profileDir} …`)
+        // pnpm output is suppressed — the user only needs the outcome.
         const installCode = await new Promise((resolve) => {
-          const child = spawn('pnpm', ['install', '--registry=https://registry.npmjs.org', '--no-frozen-lockfile'], {
-            cwd: profileDir,
-            stdio: 'inherit',
-            shell: process.platform === 'win32',
-          })
+          // Windows ships pnpm as a .cmd shim; run it via cmd.exe with an
+          // argument array (no shell execution, no string interpolation).
+          const child =
+            process.platform === 'win32'
+              ? spawn('cmd.exe', ['/c', 'pnpm', 'install', '--registry=https://registry.npmjs.org', '--no-frozen-lockfile'], { cwd: profileDir, stdio: 'ignore' })
+              : spawn('pnpm', ['install', '--registry=https://registry.npmjs.org', '--no-frozen-lockfile'], { cwd: profileDir, stdio: 'ignore' })
           child.on('error', (e) => {
-            io.err(`could not run pnpm: ${e.message} — run it manually: cd ${profileDir} && pnpm install`)
+            io.err(`✗ could not run pnpm: ${e.message} (run it manually: cd ${profileDir} && pnpm install)`)
             resolve(null)
           })
           child.on('close', (code) => resolve(code))
         })
         if (installCode !== 0) {
-          io.err(`pnpm install exited ${installCode ?? 'with an error'} — run it manually: cd ${profileDir} && pnpm install`)
+          io.err(`✗ pnpm install failed (run it manually: cd ${profileDir} && pnpm install)`)
           return 1
         }
-        io.out(`dsh-openwolf@${ownVersion} is now active in profile '${profileName}'. Restart the harness (dsh web) to load it.`)
+        io.out(`✓ dsh-openwolf@${ownVersion} installed into profile '${profileName}'. Restart the harness (dsh web) to activate it.`)
         return 0
       }
       io.err('usage: dshwolf harness status | dshwolf harness add [profile-name]')

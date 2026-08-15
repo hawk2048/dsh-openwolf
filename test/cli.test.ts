@@ -276,8 +276,8 @@ test('dshwolf harness add wires the plugin into a profile', async () => {
     // --no-install keeps the test hermetic (no pnpm run, no network).
     out = ''
     assert.equal(await main(['harness', 'add', 'cli', '--no-install'], io), 0)
-    assert.match(out, /wired dsh-openwolf@/)
-    assert.match(out, /next: cd .*pnpm install/)
+    assert.match(out, /✓ dsh-openwolf@/)
+    assert.match(out, /run pnpm install/)
     const doc = JSON.parse(await readFile(join(profiles, 'cli/package.json'), 'utf8'))
     assert.ok(doc.dependencies['dsh-openwolf'], 'dependency added')
     assert.ok(doc.dsh.profile.bundles.includes('dsh-openwolf'), 'bundle registered')

@@ -5,6 +5,19 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.12] — 2026-08-15
+
+### Changed
+
+- **`dshwolf harness add` output is now one clean line** — the intermediate
+  "wired …", "installing into …" and the raw `pnpm install` output are gone;
+  success prints exactly
+  `✓ dsh-openwolf@<v> installed into profile '<name>'. Restart the harness (dsh web) to activate it.`
+  (`--no-install` prints a one-line "run pnpm install in … to finish"). The
+  install runs via `cmd.exe /c pnpm …` on Windows — argument-array spawn, no
+  `shell:true` and no shell-string execution, keeping the security audit
+  suite green (it caught the first two attempts).
+
 ## [0.8.11] — 2026-08-15
 
 ### Added
@@ -312,6 +325,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.12]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.12
 [0.8.11]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.11
 [0.8.10]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.10
 [0.8.9]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.9
