@@ -90,6 +90,17 @@ npm install -g dsh-openwolf    # 或项目内：npm install --save-dev dsh-openw
 wolf init . && wolf scan .     # 初始化 + 索引当前目录
 ```
 
+> **注意——方式 B 不会把插件接进 harness。** CLI 和 harness 插件是同一个
+> `.wolf/` 大脑的两个前端：CLI 初始化的内容（地图、STATUS、memory、buglog、
+> 账本）正是 harness 读取的内容。但全局 `npm install` 对 harness **不可见**——
+> harness 只解析你 profile `dependencies` 里声明的包（已实测：profile
+> `node_modules` 解析不到全局副本）。要获得会话内体验（工具、会话摘要、读/写
+> 拦截），请用**方式 A**、对话安装，或独立安装后跑 `wolf harness add [profile]`
+> 一键把插件接进某个 profile。两者可以并存——CLI 给人和 cron 用、插件给会话
+> 用，共享同一个大脑。（这对应 OpenWolf 的 `openwolf init` 自动给各 agent
+> 接线；区别是 DSH 本身就是 agent 平台，所以"接线"= profile 里注册一行，
+> 而不是安装 hook 文件。）
+
 从 git URL 或本地 checkout 安装需要额外的构建授权——见
 [从源码安装](docs/INSTALL-FROM-SOURCE.md)。
 
@@ -302,6 +313,13 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 | `wolf scan --check [dir]` | 校验索引与文件系统一致（size/mtime + git HEAD） | CI 或会话前校验；漂移退出码 1 |
 | `wolf status [dir]` | 大脑健康：配置、扫描状态、账本、memory/buglog 计数 | "我的大脑健康吗？" |
 | `wolf report [dir]` | token 账本摘要：各会话实测 vs 估算 | 弄清楚 token 花在哪 |
+
+**harness 接线**（方式 B 安装后）
+
+| 命令 | 作用 | 什么时候用 |
+|---|---|---|
+| `wolf harness status` | 列出 DSH profiles，标出哪些已接 dsh-openwolf | "我哪些 profile 已经装了插件？" |
+| `wolf harness add [name]` | 把插件写进某 profile 的 `package.json`（dependencies + bundles），默认 `web` | 独立安装后想要会话内体验（然后在该 profile 跑 `pnpm install` 并重启） |
 
 **记忆与 bug**
 

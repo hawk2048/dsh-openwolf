@@ -104,6 +104,21 @@ npm install -g dsh-openwolf    # or: npm install --save-dev dsh-openwolf in a pr
 wolf init . && wolf scan .     # initialize + index the current directory
 ```
 
+> **Heads up — Option B does not wire the plugin into the harness.** The CLI
+> and the harness plugin are two frontends over the **same** `.wolf/` brain:
+> what the CLI initializes (map, STATUS, memory, buglog, ledger) is exactly
+> what the harness reads. But a global `npm install` is invisible to the
+> harness — it only resolves packages declared in your profile's
+> `dependencies` (verified: a global copy is *not* resolvable from the
+> profile's `node_modules`). To get the in-session experience (tools, session
+> digest, read/write interception), use **Option A**, the conversational
+> install, or — after a standalone install — `wolf harness add [profile]`
+> which wires the plugin into a profile for you. You can run both side by
+> side — CLI for humans and cron, plugin for sessions, one shared brain.
+> (This mirrors how OpenWolf's `openwolf init` auto-wires hooks to each
+> agent; DSH *is* the agent platform, so "wiring" is a one-line profile
+> registration instead of installing hook files.)
+
 Installing from a git URL or a local checkout needs extra build
 authorization — see [Installing from Source](docs/INSTALL-FROM-SOURCE.md) for
 that path.
@@ -344,6 +359,13 @@ They are grouped by what you are trying to do:
 | `wolf scan --check [dir]` | Verify the index matches the filesystem (size/mtime + git HEAD) | CI or pre-session verification; exits 1 on drift |
 | `wolf status [dir]` | Brain health: config, scan state, ledger, memory/buglog counts | "Is my brain healthy?" |
 | `wolf report [dir]` | Token ledger summary: measured vs estimated per session | Understanding where tokens went |
+
+**Harness wiring** (Option B installs)
+
+| Command | What it does | When to use it |
+|---|---|---|
+| `wolf harness status` | List DSH profiles and whether each has `dsh-openwolf` wired | "Which of my profiles already have the plugin?" |
+| `wolf harness add [name]` | Wire the plugin into a profile's `package.json` (dependencies + bundles), default `web` | After a standalone install, to get the in-session experience too (then `pnpm install` in the profile + restart) |
 
 **Memory and bugs**
 

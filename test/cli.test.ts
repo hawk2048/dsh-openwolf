@@ -186,3 +186,76 @@ test('resolveToken: ephemeral random token with no flags', async () => {
   assert.notEqual(a.token, b.token)
   assert.equal(a.tokenFile, undefined)
 })
+
+test('wolf harness status lists profiles and wiring', async () => {
+  const profiles = await mkdtemp(join(tmpdir(), 'openwolf-profiles-'))
+  await mkdir(join(profiles, 'web'), { recursive: true })
+  await mkdir(join(profiles, 'headless'), { recursive: true })
+  await writeFile(join(profiles, 'web/package.json'), JSON.stringify({
+    name: 'dsh-profile-web', private: true,
+    dependencies: { 'dsh-openwolf': '0.8.5' },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-openwolf'] } },
+  }))
+  await writeFile(join(profiles, 'headless/package.json'), JSON.stringify({
+    name: 'dsh-profile-headless', private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } },
+  }))
+  const oldEnv = process.env.DSH_WOLF_PROFILES_DIR
+  process.env.DSH_WOLF_PROFILES_DIR = profiles
+  try {
+    out = ''
+    assert.equal(await main(['harness', 'status'], io), 0)
+    assert.match(out, /✔ web/)
+    assert.match(out, /· headless.*not wired/)
+  } finally {
+    if (oldEnv === undefined) delete process.env.DSH_WOLF_PROFILES_DIR
+    else process.env.DSH_WOLF_PROFILES_DIR = oldEnv
+    await rm(profiles, { recursive: true, force: true })
+  }
+})
+
+test('wolf harness add wires the plugin into a profile', async () => {
+  const profiles = await mkdtemp(join(tmpdir(), 'openwolf-profiles-add-'))
+  await mkdir(join(profiles, 'cli'), { recursive: true })
+  await writeFile(join(profiles, 'cli/package.json'), JSON.stringify({
+    name: 'dsh-profile-cli', private: true,
+    dependencies: {},
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } },
+  }))
+  const oldEnv = process.env.DSH_WOLF_PROFILES_DIR
+  process.env.DSH_WOLF_PROFILES_DIR = profiles
+  try {
+    out = ''
+    assert.equal(await main(['harness', 'add', 'cli'], io), 0)
+    assert.match(out, /wired dsh-openwolf@/)
+    const doc = JSON.parse(await readFile(join(profiles, 'cli/package.json'), 'utf8'))
+    assert.ok(doc.dependencies['dsh-openwolf'], 'dependency added')
+    assert.ok(doc.dsh.profile.bundles.includes('dsh-openwolf'), 'bundle registered')
+    assert.ok(!doc.dsh.profile.bundles.includes('dsh-openwolf') === false, 'no duplicate bundle')
+    // Idempotent: a second add does not duplicate the bundle entry.
+    out = ''
+    assert.equal(await main(['harness', 'add', 'cli'], io), 0)
+    const doc2 = JSON.parse(await readFile(join(profiles, 'cli/package.json'), 'utf8'))
+    assert.equal(doc2.dsh.profile.bundles.filter((b) => b === 'dsh-openwolf').length, 1)
+  } finally {
+    if (oldEnv === undefined) delete process.env.DSH_WOLF_PROFILES_DIR
+    else process.env.DSH_WOLF_PROFILES_DIR = oldEnv
+    await rm(profiles, { recursive: true, force: true })
+  }
+})
+
+test('wolf harness add rejects an unknown profile', async () => {
+  const profiles = await mkdtemp(join(tmpdir(), 'openwolf-profiles-bad-'))
+  const oldEnv = process.env.DSH_WOLF_PROFILES_DIR
+  process.env.DSH_WOLF_PROFILES_DIR = profiles
+  try {
+    err = ''
+    assert.equal(await main(['harness', 'add', 'nope'], io), 1)
+    assert.match(err, /no profile 'nope'/)
+  } finally {
+    if (oldEnv === undefined) delete process.env.DSH_WOLF_PROFILES_DIR
+    else process.env.DSH_WOLF_PROFILES_DIR = oldEnv
+    await rm(profiles, { recursive: true, force: true })
+  }
+})

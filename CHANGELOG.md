@@ -5,6 +5,26 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.6] — 2026-08-15
+
+### Added
+
+- **`wolf harness status` / `wolf harness add [name]`** — the CLI can now
+  detect which DSH profiles have `dsh-openwolf` wired (`status`) and wire it
+  into a profile's `package.json` (`add`, default `web`), mirroring OpenWolf's
+  `openwolf init` auto-wire step. After a standalone (`npm install -g`)
+  install, this is the one-command bridge to the in-session experience
+  (then `pnpm install` in the profile + restart). `DSH_WOLF_PROFILES_DIR`
+  env-overridable for tests; 3 new unit tests.
+
+### Changed (docs)
+
+- **Option B clarified with a verified fact** — the README now states plainly
+  that a global `npm install` is invisible to the harness (verified: a global
+  copy is not resolvable from the profile's `node_modules`), that CLI and
+  plugin share one `.wolf/` brain, and how OpenWolf's `openwolf init` wiring
+  maps onto DSH's one-line profile registration. Both EN + zh.
+
 ## [0.8.5] — 2026-08-15
 
 ### Changed (docs)
@@ -229,6 +249,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.6]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.6
 [0.8.5]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.5
 [0.8.4]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.4
 [0.8.3]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.3

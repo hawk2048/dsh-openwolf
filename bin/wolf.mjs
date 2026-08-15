@@ -11,10 +11,11 @@ import { currentGitHead, anatomyStaleReason } from '../lib/digest.js'
 import { startDashboard } from '../lib/dashboard.js'
 import { parseCron, dueTasks, nextMinuteDelay } from '../lib/cron.js'
 import { listProjects, registerProject, unregisterProject, backupBrain, listBackups, restoreBrain } from '../lib/registry.js'
-import { stat, readFile, writeFile, rm, mkdir, chmod } from 'node:fs/promises'
+import { stat, readFile, writeFile, rm, mkdir, chmod, readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { join, resolve, dirname } from 'node:path'
+import { homedir } from 'node:os'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
 
@@ -61,7 +62,9 @@ const USAGE = `usage:
   wolf dashboard [dir]        local dashboard server (--port, --token, --token-file)
   wolf daemon start [dir]     dashboard + cron scheduler as a background daemon
                               (--port, --token, --token-file)
-  wolf daemon stop [dir]      stop the daemon`
+  wolf daemon stop [dir]      stop the daemon
+  wolf harness status         check which DSH profiles have dsh-openwolf wired
+  wolf harness add [name]     wire dsh-openwolf into a DSH profile (default: web)`
 
 /** Run one cron action against a workspace. */
 async function runCronAction(dir, action, io) {
@@ -460,6 +463,70 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
         }
       }
       io.err('usage: wolf daemon start|stop')
+      return 2
+    }
+    case 'harness': {
+      // `wolf harness status|add [name]` — detect DSH profiles and wire the
+      // plugin into one. Mirrors OpenWolf's `openwolf init` "auto-wire" step:
+      // DSH is the agent platform itself, so wiring = editing the profile's
+      // package.json (dependencies + bundles) instead of installing hook files.
+      const action = rest[0] ?? 'status'
+      // Env-overridable for tests: DSH_WOLF_PROFILES_DIR.
+      const profilesDir =
+        process.env.DSH_WOLF_PROFILES_DIR !== undefined
+          ? resolve(process.env.DSH_WOLF_PROFILES_DIR)
+          : join(homedir(), '.dsh', 'profiles')
+      if (action === 'status') {
+        let names = []
+        try {
+          names = (await readdir(profilesDir, { withFileTypes: true }))
+            .filter((e) => e.isDirectory() && existsSync(join(profilesDir, e.name, 'package.json')))
+            .map((e) => e.name)
+            .sort()
+        } catch {
+          io.err(`no DSH profiles dir at ${profilesDir}`)
+          return 1
+        }
+        if (names.length === 0) {
+          io.out('no DSH profiles found')
+          return 0
+        }
+        for (const name of names) {
+          const pkgPath = join(profilesDir, name, 'package.json')
+          let wired = false
+          try {
+            const doc = JSON.parse(await readFile(pkgPath, 'utf8'))
+            const deps = doc.dependencies ?? {}
+            const bundles = doc.dsh?.profile?.bundles ?? []
+            wired = deps['dsh-openwolf'] !== undefined && bundles.includes('dsh-openwolf')
+          } catch {
+            wired = false
+          }
+          io.out(`${wired ? '✔' : '·'} ${name}${wired ? '' : '  (dsh-openwolf not wired)'}`)
+        }
+        return 0
+      }
+      if (action === 'add') {
+        const profileName = rest.slice(1).find((a) => !a.startsWith('-')) ?? 'web'
+        const pkgPath = join(profilesDir, profileName, 'package.json')
+        if (!existsSync(pkgPath)) {
+          io.err(`no profile '${profileName}' at ${pkgPath}`)
+          return 1
+        }
+        // Pin the version this CLI ships with (same package, so it matches).
+        const ownVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
+        const doc = JSON.parse(await readFile(pkgPath, 'utf8'))
+        doc.dependencies = doc.dependencies ?? {}
+        doc.dependencies['dsh-openwolf'] = ownVersion
+        doc.dsh = doc.dsh ?? { profile: { bundles: [] } }
+        doc.dsh.profile = doc.dsh.profile ?? { bundles: [] }
+        if (!doc.dsh.profile.bundles.includes('dsh-openwolf')) doc.dsh.profile.bundles.push('dsh-openwolf')
+        await writeFile(pkgPath, JSON.stringify(doc, null, 2) + '\n', 'utf8')
+        io.out(`wired dsh-openwolf@${ownVersion} into profile '${profileName}'`)
+        io.out(`next: cd ${join(profilesDir, profileName)} && pnpm install, then restart the harness`)
+        return 0
+      }
+      io.err('usage: wolf harness status | wolf harness add [profile-name]')
       return 2
     }
     default:
