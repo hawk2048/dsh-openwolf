@@ -101,17 +101,15 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 
 **→ The full OpenWolf v2.0.1 feature set (A1-A7, B1-B8, C1-C3, E-H) is now replicated as a native DSH plugin, including the completion pass: P0 0.2.0-rc.1 · P1 0.3.0-rc.2 · P2 0.4.0-rc.1 · P3 0.5.0-rc.2 · P4 (completion) 0.6.0-rc.1 (latest).**
 
-### P4 — Completion pass (v0.6) ✅ SHIPPED (0.6.0-rc.1)
-- ✅ Cron system (H2): zero-dep 5-field parser/matcher, durable tasks (`.wolf/cron-tasks.json`), CLI `cron add/list/run/remove`, daemon `serve` runs due tasks every minute
-- ✅ Project registry + update/restore: `~/.dsh-wolf-registry.json` (env-overridable), `register`/`unregister`/`update` (backup + rescan every project)/`backups`/`restore [tag]` (timestamped rollback)
-- ✅ `bug search` CLI; `OPENWOLF.md` operating protocol generated on init
-- ✅ Dashboard panels completed: overview / activity timeline / cron status (plus tokens/health/anatomy/handoff/bugs)
-- ✅ Symbol read hints sorted by token size (top-5, OpenWolf parity)
-- ✅ Tests: 76 unit + 36 integration
+### P4 — Completion pass (v0.6) ✅ SHIPPED (0.6.0-rc.3)
+- ✅ Cron system (H2): zero-dep 5-field parser/matcher (+ `@` shorthands, month/weekday names), minute-anchored timer + in-flight guard, durable tasks (`.wolf/cron-tasks.json`), CLI `cron add/list/run/remove`, `wolf_schedule` tool (model registers zero-token tasks), daemon `serve`
+- ✅ Project registry + update/restore: `~/.dsh-wolf-registry.json` (env-overridable), `register`/`unregister`/`update` (backup + rescan)/`backups`/`restore [tag]`
+- ✅ **B1 durable anatomy index**: `.wolf/anatomy-index.json` per-file entries; incremental refresh re-analyzes only drifted files (cold-start + dashboard no longer full-scan)
+- ✅ **F security regression suite**: traversal matrix, dashboard auth (both transports), secret denylist full-pipeline, no-shell-interpolation source audit — caught 2 real denylist bugs
+- ✅ `bug search` CLI; `OPENWOLF.md` protocol; dashboard panels (overview/activity/cron); symbol hints sorted by token size
+- ✅ Tests: 84 unit + 40 integration
 
-### Not replicated (documented deltas)
-- **Multi-agent wiring (D)** — OpenWolf hooks five EXTERNAL agents (Claude Code/Codex/OpenCode/Gemini/Cursor). DSH is the agent platform itself, so this is N/A by design: one brain serves every DSH session/subagent.
-- **Full `dsh-schedule` integration (H2)** — the cron engine is the plugin's own (daemon-driven); the harness's model-facing `dsh-schedule` (agent-scoped durable schedules with UI) is a separate surface that a future iteration could bridge.
+**→ Full replication complete: 23/23 features (2 N/A-by-design documented). P0 0.2.0-rc.1 · P1 0.3.0-rc.2 · P2 0.4.0-rc.1 · P3 0.5.0-rc.2 · P4 0.6.0-rc.3 (latest).**
 
 ## 4. Research items before implementation
 
