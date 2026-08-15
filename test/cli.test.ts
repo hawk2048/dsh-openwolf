@@ -273,16 +273,18 @@ test('dshwolf harness add wires the plugin into a profile', async () => {
   const oldEnv = process.env.DSH_WOLF_PROFILES_DIR
   process.env.DSH_WOLF_PROFILES_DIR = profiles
   try {
+    // --no-install keeps the test hermetic (no pnpm run, no network).
     out = ''
-    assert.equal(await main(['harness', 'add', 'cli'], io), 0)
+    assert.equal(await main(['harness', 'add', 'cli', '--no-install'], io), 0)
     assert.match(out, /wired dsh-openwolf@/)
+    assert.match(out, /next: cd .*pnpm install/)
     const doc = JSON.parse(await readFile(join(profiles, 'cli/package.json'), 'utf8'))
     assert.ok(doc.dependencies['dsh-openwolf'], 'dependency added')
     assert.ok(doc.dsh.profile.bundles.includes('dsh-openwolf'), 'bundle registered')
     assert.ok(!doc.dsh.profile.bundles.includes('dsh-openwolf') === false, 'no duplicate bundle')
     // Idempotent: a second add does not duplicate the bundle entry.
     out = ''
-    assert.equal(await main(['harness', 'add', 'cli'], io), 0)
+    assert.equal(await main(['harness', 'add', 'cli', '--no-install'], io), 0)
     const doc2 = JSON.parse(await readFile(join(profiles, 'cli/package.json'), 'utf8'))
     assert.equal(doc2.dsh.profile.bundles.filter((b) => b === 'dsh-openwolf').length, 1)
   } finally {

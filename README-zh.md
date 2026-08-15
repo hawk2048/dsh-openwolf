@@ -96,12 +96,11 @@ dshwolf init . && dshwolf scan .     # 初始化 + 索引当前目录
 ```
 
 **要在 harness 里也使能**（会话获得工具、会话摘要、读/写拦截——而不只是
-CLI），把已装的包接进某个 profile：
+CLI），把已装的包接进某个 profile——**一条命令同时完成接线 + 安装依赖**：
 
 ```bash
 dshwolf harness status         # 看看哪些 profile 已接线
-dshwolf harness add web        # 接进 'web' profile（默认）
-cd ~/.dsh/profiles/web && pnpm install   # 安装依赖
+dshwolf harness add web        # 接线 + pnpm install 装进 'web' profile（默认）
 dsh web                        # 重启 harness（或重启 GUI）
 ```
 
@@ -109,10 +108,11 @@ dsh web                        # 重启 harness（或重启 GUI）
 > 前端——CLI 初始化的内容（地图、STATUS、memory、buglog、账本）正是 harness
 > 读取的内容。但全局 `npm install` 对 harness **不可见**：harness 只解析你
 > profile `dependencies` 里声明的包（已实测：profile `node_modules` 解析不到
-> 全局副本）。`dshwolf harness add` 替你注册依赖 + bundle 行，让两个前端并存
-> ——CLI 给人和 cron 用、插件给会话用，共享同一个大脑。（这对应 OpenWolf 的
-> `openwolf init` 自动给各 agent 接线；区别是 DSH 本身就是 agent 平台，所以
-> "接线"= profile 里注册一行，而不是安装 hook 文件。）
+> 全局副本）。`dshwolf harness add` 替你注册依赖 + bundle 行**并自动运行
+> `pnpm install`**（对应 OpenWolf `openwolf init --agent` 的一步到位；只想改
+> package.json 时用 `--no-install`，如 CI）。两个前端并存——CLI 给人和 cron
+> 用、插件给会话用，共享同一个大脑。DSH 本身就是 agent 平台，所以"接线"=
+> profile 里注册一行，而不是 OpenWolf 的 hook 文件安装。
 
 从 git URL 或本地 checkout 安装需要额外的构建授权——见
 [从源码安装](docs/INSTALL-FROM-SOURCE.md)。
@@ -332,7 +332,7 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
 | `dshwolf harness status` | 列出 DSH profiles，标出哪些已接 dsh-openwolf | "我哪些 profile 已经装了插件？" |
-| `dshwolf harness add [name]` | 把插件写进某 profile 的 `package.json`（dependencies + bundles），默认 `web` | 独立安装后想要会话内体验（然后在该 profile 跑 `pnpm install` 并重启） |
+| `dshwolf harness add [name]` | 把插件写进某 profile 的 `package.json`（dependencies + bundles）**并自动运行 `pnpm install`**（默认 profile `web`；`--no-install` 只改文件） | 方式 2 独立安装后，一条命令获得会话内体验（然后重启） |
 
 **记忆与 bug**
 

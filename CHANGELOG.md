@@ -5,6 +5,23 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.11] — 2026-08-15
+
+### Added
+
+- **`dshwolf harness add` is now one-command wiring** — it edits the profile's
+  `package.json` (dependencies + bundles) **and runs `pnpm install` for you**
+  (mirroring `openwolf init --agent` doing the whole setup in one shot), then
+  prints "restart the harness". `--no-install` edits only (CI/scripts).
+  Verified live: `harness add web` wired + installed `dsh-openwolf@0.8.10`
+  into the real web profile in one shot.
+
+### Changed (docs)
+
+- **Way 2 no longer needs the manual `cd … && pnpm install` step** — Quick
+  Start (EN + zh) now shows: `harness status` → `harness add web` (wires +
+  installs) → restart.
+
 ## [0.8.10] — 2026-08-15
 
 ### Changed (docs)
@@ -295,6 +312,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.11]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.11
 [0.8.10]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.10
 [0.8.9]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.9
 [0.8.8]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.8

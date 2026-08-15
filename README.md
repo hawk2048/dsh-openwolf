@@ -110,12 +110,12 @@ dshwolf init . && dshwolf scan .  # initialize + index the current directory
 
 **To also enable it inside the harness** (so sessions get the tools, session
 digest, and read/write interception — not just the CLI), wire the installed
-package into a profile:
+package into a profile — one command does the wiring *and* installs the
+dependency:
 
 ```bash
 dshwolf harness status         # see which profiles have it wired
-dshwolf harness add web        # wire it into the 'web' profile (default)
-cd ~/.dsh/profiles/web && pnpm install   # install the dependency
+dshwolf harness add web        # wire + pnpm-install into the 'web' profile (default)
 dsh web                        # restart the harness (or restart the GUI)
 ```
 
@@ -125,11 +125,12 @@ dsh web                        # restart the harness (or restart the GUI)
 > `npm install` is invisible to the harness: it only resolves packages
 > declared in your profile's `dependencies` (verified: a global copy is *not*
 > resolvable from the profile's `node_modules`). `dshwolf harness add`
-> registers the dependency + bundle row for you, so both frontends work side
-> by side — CLI for humans and cron, plugin for sessions, one shared brain.
-> (This mirrors how OpenWolf's `openwolf init` auto-wires hooks to each
-> agent; DSH *is* the agent platform, so "wiring" is a one-line profile
-> registration instead of installing hook files.)
+> registers the dependency + bundle row **and runs `pnpm install` for you**
+> (mirroring `openwolf init --agent` doing the whole setup in one shot; use
+> `--no-install` if you want to edit only, e.g. in CI). Both frontends then
+> work side by side — CLI for humans and cron, plugin for sessions, one
+> shared brain. DSH *is* the agent platform, so "wiring" is a one-line
+> profile registration instead of OpenWolf's hook-file installation.
 
 Installing from a git URL or a local checkout needs extra build
 authorization — see [Installing from Source](docs/INSTALL-FROM-SOURCE.md) for
@@ -377,7 +378,7 @@ They are grouped by what you are trying to do:
 | Command | What it does | When to use it |
 |---|---|---|
 | `dshwolf harness status` | List DSH profiles and whether each has `dsh-openwolf` wired | "Which of my profiles already have the plugin?" |
-| `dshwolf harness add [name]` | Wire the plugin into a profile's `package.json` (dependencies + bundles), default `web` | After a standalone install, to get the in-session experience too (then `pnpm install` in the profile + restart) |
+| `dshwolf harness add [name]` | Wire the plugin into a profile's `package.json` (dependencies + bundles) **and run `pnpm install`** (default profile `web`; `--no-install` to edit only) | After a Way 2 standalone install, to get the in-session experience in one command (then restart) |
 
 **Memory and bugs**
 

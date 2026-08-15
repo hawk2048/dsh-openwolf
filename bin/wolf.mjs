@@ -75,7 +75,8 @@ const USAGE = `usage: dshwolf <command> [args]
 
   Harness wiring (standalone installs)
     dshwolf harness status        list DSH profiles and whether dsh-openwolf is wired
-    dshwolf harness add [name]    wire dsh-openwolf into a DSH profile (default: web)
+    dshwolf harness add [name]    wire + pnpm-install dsh-openwolf into a profile
+                                  (default: web; --no-install to only edit package.json)
 
 Options:
   -h, --help                      show this help
@@ -108,8 +109,9 @@ const HELP_HARNESS = `usage: dshwolf harness <status|add> [name]
 
   dshwolf harness status           list DSH profiles and whether dsh-openwolf is wired
   dshwolf harness add [name]       wire dsh-openwolf into a profile's package.json
-                                   (default profile: web) — then run pnpm install
-                                   in the profile and restart the harness`
+                                   (default profile: web) and run pnpm install —
+                                   then restart the harness. Use --no-install to
+                                   only edit package.json (e.g. for CI).`
 
 /** Run one cron action against a workspace. */
 async function runCronAction(dir, action, io) {
@@ -581,6 +583,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       }
       if (action === 'add') {
         const profileName = rest.slice(1).find((a) => !a.startsWith('-')) ?? 'web'
+        const noInstall = rest.includes('--no-install')
         const pkgPath = join(profilesDir, profileName, 'package.json')
         if (!existsSync(pkgPath)) {
           io.err(`no profile '${profileName}' at ${pkgPath}`)
@@ -596,7 +599,31 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
         if (!doc.dsh.profile.bundles.includes('dsh-openwolf')) doc.dsh.profile.bundles.push('dsh-openwolf')
         await writeFile(pkgPath, JSON.stringify(doc, null, 2) + '\n', 'utf8')
         io.out(`wired dsh-openwolf@${ownVersion} into profile '${profileName}'`)
-        io.out(`next: cd ${join(profilesDir, profileName)} && pnpm install, then restart the harness`)
+        const profileDir = join(profilesDir, profileName)
+        if (noInstall) {
+          io.out(`next: cd ${profileDir} && pnpm install, then restart the harness`)
+          return 0
+        }
+        // One-command wiring: install the dependency inside the profile too,
+        // mirroring `openwolf init --agent` doing the whole setup in one shot.
+        io.out(`installing into ${profileDir} …`)
+        const installCode = await new Promise((resolve) => {
+          const child = spawn('pnpm', ['install', '--registry=https://registry.npmjs.org', '--no-frozen-lockfile'], {
+            cwd: profileDir,
+            stdio: 'inherit',
+            shell: process.platform === 'win32',
+          })
+          child.on('error', (e) => {
+            io.err(`could not run pnpm: ${e.message} — run it manually: cd ${profileDir} && pnpm install`)
+            resolve(null)
+          })
+          child.on('close', (code) => resolve(code))
+        })
+        if (installCode !== 0) {
+          io.err(`pnpm install exited ${installCode ?? 'with an error'} — run it manually: cd ${profileDir} && pnpm install`)
+          return 1
+        }
+        io.out(`dsh-openwolf@${ownVersion} is now active in profile '${profileName}'. Restart the harness (dsh web) to load it.`)
         return 0
       }
       io.err('usage: dshwolf harness status | dshwolf harness add [profile-name]')
