@@ -11,7 +11,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        node: [20, 22, 24]
+        # node 20 cannot run the .ts test files (type stripping needs 22.6+);
+        # 22/24 both support `node --test` globs + native TS.
+        node: [22, 24]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +33,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Unit + integration tests
-        run: node --test "test/*.test.ts"
+        run: node --test --experimental-strip-types "test/*.test.ts"
 
       - name: Integration harness tests
         run: node test/harness-integration.mjs && node test/harness-integration2.mjs

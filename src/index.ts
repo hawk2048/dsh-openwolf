@@ -519,8 +519,13 @@ export function apply(ctx: Context, config: Config) {
     const watcher = watch(root, {
       ignoreInitial: true,
       ignored: (path: string) => {
+        // Guard against paths at/below the root boundary — on Windows,
+        // comparing a path equal to or shorter than the root can crash
+        // libuv (chokidar 4 known issue). Any path not strictly inside
+        // root is not our concern.
+        if (path.length <= root.length) return true
         const rel = path.slice(root.length).replace(/^[\\/]+/, '').replace(/\\/g, '/')
-        if (rel === '') return false
+        if (rel === '') return true
         if (!config.hidden && rel.split('/').some((seg) => seg.startsWith('.'))) return true
         return opts.extraIgnore.some((p) => matchLite(p, rel))
       },
