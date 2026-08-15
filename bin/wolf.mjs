@@ -29,7 +29,7 @@ function scanOptions() {
     symbolBackend: 'auto',
     symbolThresholdTokens: 500,
     hidden: false,
-    extraIgnore: ['node_modules', '.git', 'dist', 'build', 'coverage', '.venv', '__pycache__', '.next', '.cache', '.turbo', '.idea', '.vscode', 'target', 'out', '*.log', 'AGENTS.md', '.wolf'],
+    extraIgnore: ['node_modules', '.git', 'dist', 'build', 'coverage', '.venv', '__pycache__', '.next', '.cache', '.turbo', '.idea', '.vscode', 'target', 'out', '*.log', 'AGENTS.md', '.dshwolf'],
     useGitignore: true,
     sortBy: 'path',
   }
@@ -61,7 +61,7 @@ function flagValue(rest, name, fallback) {
 const USAGE = `usage: dshwolf <command> [args]
 
   Brain lifecycle
-    dshwolf init [dir]            initialize .wolf/ brain
+    dshwolf init [dir]            initialize .dshwolf/ brain
                                   (--agent <profile|all|deepseek-harness> also wires the harness)
     dshwolf scan [dir]            rescan + pin state + render anatomy.md + inject AGENTS.md
     dshwolf scan --check [dir]    verify index vs filesystem (CI-friendly; exit 1 on drift)
@@ -85,8 +85,8 @@ const USAGE = `usage: dshwolf <command> [args]
     dshwolf register [dir]        add workspace to the global registry
     dshwolf unregister [dir]      remove workspace from the registry
     dshwolf update                backup + rescan every registered workspace
-    dshwolf backups [dir]         list timestamped .wolf backups
-    dshwolf restore [dir] [tag]   restore .wolf from a backup (newest by default)
+    dshwolf backups [dir]         list timestamped .dshwolf backups
+    dshwolf restore [dir] [tag]   restore .dshwolf from a backup (newest by default)
 
   Harness wiring (standalone installs)
     dshwolf harness status        list DSH profiles and whether dsh-openwolf is wired
@@ -117,7 +117,7 @@ const HELP_DAEMON = `usage: dshwolf daemon <start|stop> [dir]
 
 const HELP_BUG = `usage: dshwolf bug search <term>
 
-  Search .wolf/buglog.json for matching entries (prevents re-debugging
+  Search .dshwolf/buglog.json for matching entries (prevents re-debugging
   already-fixed issues). Use --dir= for a specific workspace.`
 
 const HELP_HARNESS = `usage: dshwolf harness <status|add> [name]
@@ -130,7 +130,7 @@ const HELP_HARNESS = `usage: dshwolf harness <status|add> [name]
 
 /** Run one cron action against a workspace. */
 async function runCronAction(dir, action, io) {
-  const brain = new WolfBrain(dir, '.wolf')
+  const brain = new WolfBrain(dir, '.dshwolf')
   await brain.ensure()
   if (action === 'check') {
     const manifest = await brain.readScanManifest()
@@ -269,12 +269,12 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
   }
 
   const dir = resolveDir(rest)
-  const brain = new WolfBrain(dir, '.wolf')
+  const brain = new WolfBrain(dir, '.dshwolf')
 
   switch (cmd) {
     case 'init': {
       await brain.ensure()
-      io.out(`brain initialized at ${join(dir, '.wolf')}`)
+      io.out(`brain initialized at ${join(dir, '.dshwolf')}`)
       // `dshwolf init --agent <name>` mirrors `openwolf init --agent claude`:
       // after initializing the brain, also wire the plugin into the harness.
       // Names: a profile name ('web', 'headless'), 'all' for every profile, or
@@ -384,7 +384,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       }
       io.out(
         [
-          `brain: ${join(dir, '.wolf')}`,
+          `brain: ${join(dir, '.dshwolf')}`,
           `config: digestBudget=${config.openwolf.context.sessionDigestBudgetTokens} · rescan=${config.openwolf.anatomy.rescanIntervalHours}h`,
           `scan: ${state.last_scanned ?? 'never'}${state.git_head !== undefined ? ` · HEAD ${state.git_head.slice(0, 8)}` : ''} · ${state.total_files ?? 0} files`,
           `ledger: ${ledger.lifetime.total_sessions} sessions`,
@@ -425,7 +425,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       }
       // bug search has no positional dir (free-text terms); use --dir= or cwd.
       const searchDir = flag(rest, 'dir', process.cwd())
-      const searchBrain = new WolfBrain(resolve(searchDir), '.wolf')
+      const searchBrain = new WolfBrain(resolve(searchDir), '.dshwolf')
       await searchBrain.ensure()
       const term = rest.slice(1).filter((a) => !a.startsWith('-')).join(' ')
       const hits = await searchBrain.searchBugs(term)
@@ -600,8 +600,8 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       // daemon's layout is `daemon <start|stop> [dir]` — the dir follows the action.
       const restAfter = rest.slice(1)
       const daemonDir = resolveDir(restAfter)
-      const daemonBrain = new WolfBrain(daemonDir, '.wolf')
-      const pidPath = join(daemonDir, '.wolf/daemon.pid')
+      const daemonBrain = new WolfBrain(daemonDir, '.dshwolf')
+      const pidPath = join(daemonDir, '.dshwolf/daemon.pid')
       if (action === 'start') {
         if (existsSync(pidPath)) {
           io.err('daemon already running (see ' + pidPath + ')')

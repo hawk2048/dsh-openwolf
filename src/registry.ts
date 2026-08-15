@@ -1,9 +1,9 @@
 /**
  * Global project registry for the `dshwolf` CLI: a machine-local JSON file
  * that lists registered workspaces, so `dshwolf update` can refresh every
- * project (with timestamped `.wolf` backups) and `dshwolf restore` can roll
- * back. Independent implementation of the reference registry/update/restore
- * trio.
+ * project (with timestamped `.dshwolf` backups) and `dshwolf restore` can
+ * roll back. Independent implementation of the reference registry/update/
+ * restore trio.
  *
  * @module dsh-openwolf/registry
  */
@@ -84,11 +84,11 @@ export async function unregisterProject(dir: string, path?: string): Promise<boo
   return true
 }
 
-/** Back up a `.wolf` brain to `<dir>/.wolf-backups/<timestamp>/`. */
-export async function backupBrain(dir: string, brainDir = '.wolf'): Promise<string> {
+/** Back up a brain to `<dir>/.dshwolf-backups/<timestamp>/`. */
+export async function backupBrain(dir: string, brainDir = '.dshwolf'): Promise<string> {
   const src = join(dir, brainDir)
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const dest = join(dir, `.wolf-backups/${stamp}`)
+  const dest = join(dir, `.dshwolf-backups/${stamp}`)
   await mkdir(dest, { recursive: true })
   await cp(src, dest, { recursive: true })
   return dest
@@ -96,7 +96,7 @@ export async function backupBrain(dir: string, brainDir = '.wolf'): Promise<stri
 
 /** List timestamped backups (newest first). */
 export async function listBackups(dir: string): Promise<string[]> {
-  const root = join(dir, '.wolf-backups')
+  const root = join(dir, '.dshwolf-backups')
   try {
     const entries = await readdir(root)
     const dirs = []
@@ -114,12 +114,12 @@ export async function listBackups(dir: string): Promise<string[]> {
 }
 
 /** Restore a brain from a backup tag (or the newest when omitted). */
-export async function restoreBrain(dir: string, tag?: string, brainDir = '.wolf'): Promise<string> {
+export async function restoreBrain(dir: string, tag?: string, brainDir = '.dshwolf'): Promise<string> {
   const backups = await listBackups(dir)
   if (backups.length === 0) throw new Error('no backups found')
   const chosen = tag ?? backups[0]!
   if (!backups.includes(chosen)) throw new Error(`backup not found: ${chosen}`)
-  const src = join(dir, '.wolf-backups', chosen)
+  const src = join(dir, '.dshwolf-backups', chosen)
   const dest = join(dir, brainDir)
   await rm(dest, { recursive: true, force: true })
   await mkdir(dest, { recursive: true })

@@ -3,7 +3,7 @@
  *
  * v0.2 adds the OpenWolf-class context core on top of the v0.1 code map:
  *
- * - `.wolf/` brain directory per workspace (STATUS, cerebrum, memory, buglog,
+ * - `.dshwolf/` brain directory per workspace (STATUS, cerebrum, memory, buglog,
  *   token ledger, session state) — see {@link module:dsh-openwolf/brain}.
  * - Session digest injected on `agent/session-start` via `agent.inject()`
  *   (STATUS 🚀 + Do-Not-Repeat + recent bugs + anatomy pointer, budget-capped)
@@ -29,7 +29,7 @@ import Schema from '@deepseek-ai/schemastery'
 import { watch, type FSWatcher } from 'chokidar'
 import { scanCodebase, summarizeFile, analyzeFile, dirsFromFiles, refreshMapFromIndex } from './scanner.ts'
 import { injectBlock, renderMap } from './render.ts'
-import { WolfBrain, isSensitiveFile } from './brain.ts'
+import { WolfBrain, isSensitiveFile, DEFAULT_BRAIN_DIR } from './brain.ts'
 import { buildSessionDigestWithWarning, currentGitHead, anatomyStaleReason, type TokenEstimator } from './digest.ts'
 import { bundledSkills } from './skills.ts'
 import { parseCron } from './cron.ts'
@@ -69,7 +69,7 @@ export interface Config {
   debounceMs: number
   /** Sort map files by `path` (ascending) or `size` (descending). */
   sortBy: 'path' | 'size'
-  /** Enable the `.wolf/` brain (session digests, memory, buglog, ledger). */
+  /** Enable the `.dshwolf/` brain (session digests, memory, buglog, ledger). */
   brainEnabled: boolean
   /** Brain directory name under the workspace root. */
   brainDir: string
@@ -112,7 +112,7 @@ export const Config: Schema<Config> = Schema.object({
   debounceMs: Schema.number().min(0).max(60000).default(1000),
   sortBy: Schema.union(['path', 'size']).default('path'),
   brainEnabled: Schema.boolean().default(true),
-  brainDir: Schema.string().default('.wolf'),
+  brainDir: Schema.string().default(DEFAULT_BRAIN_DIR),
   sessionDigestBudgetTokens: Schema.number().min(128).max(1 << 15).default(1500),
   rescanIntervalHours: Schema.number().min(0.1).max(24 * 30).default(6),
   symbolThresholdTokens: Schema.number().min(100).max(1 << 20).default(500),
@@ -307,7 +307,7 @@ export function apply(ctx: Context, config: Config) {
         const files = [...new Set(session.files_written.map((w) => w.file))].slice(-15)
         if (files.length > 0) {
           agent.inject(wolfMessage(
-            `## Session in progress (context was just compacted)\nFiles already modified this session: ${files.join(', ')}. Do not re-read them wholesale — check .wolf/memory.md for what was done.`,
+            `## Session in progress (context was just compacted)\nFiles already modified this session: ${files.join(', ')}. Do not re-read them wholesale — check .dshwolf/memory.md for what was done.`,
           ))
         }
         return
@@ -343,10 +343,10 @@ export function apply(ctx: Context, config: Config) {
         const buglog = await brain.readBuglog()
         const reminders: string[] = []
         if (entryLines.length < 3) {
-          reminders.push(`💡 .wolf/cerebrum.md has only ${entryLines.length} entr${entryLines.length === 1 ? 'y' : 'ies'}. Record preferences, conventions, and mistakes with wolf_learn this session.`)
+          reminders.push(`💡 .dshwolf/cerebrum.md has only ${entryLines.length} entr${entryLines.length === 1 ? 'y' : 'ies'}. Record preferences, conventions, and mistakes with wolf_learn this session.`)
         }
         if (buglog.bugs.length === 0) {
-          reminders.push('📋 .wolf/buglog.json is empty. Log any bugs you find or fix with wolf_bug.')
+          reminders.push('📋 .dshwolf/buglog.json is empty. Log any bugs you find or fix with wolf_bug.')
         }
         if (reminders.length > 0) {
           agent.inject(wolfMessage(reminders.join('\n')))
@@ -435,7 +435,7 @@ export function apply(ctx: Context, config: Config) {
       const args = (exec.arguments ?? {}) as { file_path?: string }
       const relPath = args.file_path
       if (typeof relPath !== 'string' || relPath === '' || isSensitiveFile(relPath)) return decision
-      if (relPath.startsWith('.wolf/') || relPath.startsWith('.wolf\\')) return decision
+      if (relPath.startsWith(`${config.brainDir}/`) || relPath.startsWith(`${config.brainDir}\\`)) return decision
 
       if (config.interceptReads && exec.name === 'read') {
         const brain = await brainOf(root)
@@ -785,7 +785,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.tools.register(defineTool({
     name: 'wolf_init',
     description:
-      'Initialize the .wolf/ brain directory for the current workspace (STATUS.md, cerebrum.md, memory.md, buglog.json, token ledger, config). Idempotent; existing data is preserved.',
+      'Initialize the .dshwolf/ brain directory for the current workspace (STATUS.md, cerebrum.md, memory.md, buglog.json, token ledger, config). Idempotent; existing data is preserved.',
     parameters: {},
     output: {
       schema: {
@@ -817,7 +817,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.tools.register(defineTool({
     name: 'wolf_status',
     description:
-      'Read or update the .wolf/STATUS.md handoff document. With no body, returns the current STATUS.md; with body, replaces it (the ## 🚀 Next phase section feeds the session digest).',
+      'Read or update the .dshwolf/STATUS.md handoff document. With no body, returns the current STATUS.md; with body, replaces it (the ## 🚀 Next phase section feeds the session digest).',
     parameters: {
       body: {
         type: 'string',
@@ -851,7 +851,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.tools.register(defineTool({
     name: 'wolf_learn',
     description:
-      'Record a learned preference, convention, or mistake in .wolf/cerebrum.md. Use for durable cross-session knowledge; the Do-Not-Repeat section feeds the session digest.',
+      'Record a learned preference, convention, or mistake in .dshwolf/cerebrum.md. Use for durable cross-session knowledge; the Do-Not-Repeat section feeds the session digest.',
     parameters: {
       section: {
         type: 'string',
@@ -886,7 +886,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.tools.register(defineTool({
     name: 'wolf_bug',
     description:
-      'Log a fixed bug to .wolf/buglog.json (searchable, prevents rediscovery), or search existing entries when only a query is given. Recent bugs feed the session digest.',
+      'Log a fixed bug to .dshwolf/buglog.json (searchable, prevents rediscovery), or search existing entries when only a query is given. Recent bugs feed the session digest.',
     parameters: {
       error: {
         type: 'string',
@@ -933,7 +933,7 @@ export function apply(ctx: Context, config: Config) {
           text: value.mode === 'logged'
             ? `bug logged: ${value.results[0]?.error_message} → ${value.results[0]?.fix}`
             : value.results.length === 0
-              ? 'no matching bugs in .wolf/buglog.json'
+              ? 'no matching bugs in .dshwolf/buglog.json'
               : value.results.map((b) => `- ${b.error_message} → ${b.fix}${b.file !== undefined ? ` (${b.file})` : ''}`).join('\n'),
         },
       ],
@@ -961,7 +961,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.tools.register(defineTool({
     name: 'wolf_report',
     description:
-      'Report token usage for this workspace: the .wolf token ledger (per session, estimated) plus the current session measurement from the harness token meter when available.',
+      'Report token usage for this workspace: the .dshwolf token ledger (per session, estimated) plus the current session measurement from the harness token meter when available.',
     parameters: {},
     output: {
       schema: {
@@ -1014,7 +1014,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.tools.register(defineTool({
     name: 'wolf_schedule',
     description:
-      'Schedule a zero-token recurring task (scan or check) in .wolf/cron-tasks.json. The daemon executes it on schedule without any LLM call per run. Use for unattended maintenance: map refreshes, integrity checks.',
+      'Schedule a zero-token recurring task (scan or check) in .dshwolf/cron-tasks.json. The daemon executes it on schedule without any LLM call per run. Use for unattended maintenance: map refreshes, integrity checks.',
     parameters: {
       add_name: { type: 'string', description: 'When adding: task name.' },
       add_expr: { type: 'string', description: 'When adding: 5-field cron expression or @daily/@hourly/@weekly/@monthly/@yearly.' },

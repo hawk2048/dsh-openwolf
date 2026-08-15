@@ -37,9 +37,9 @@
         symbols: true
         debounceMs: 1000
         sortBy: path
-        # ── v0.2: the .wolf/ brain (OpenWolf-class context core) ──────────
+        # ── v0.2: the .dshwolf/ brain (OpenWolf-class context core, isolated) ─
         brainEnabled: true
-        brainDir: .wolf
+        brainDir: .dshwolf
         sessionDigestBudgetTokens: 1500
         rescanIntervalHours: 6
         symbolThresholdTokens: 500

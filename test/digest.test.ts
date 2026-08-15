@@ -12,7 +12,7 @@ let cleanup: () => Promise<void> = async () => {}
 
 before(async () => {
   root = await mkdtemp(join(tmpdir(), 'openwolf-digest-'))
-  brain = new WolfBrain(root, '.wolf')
+  brain = new WolfBrain(root, '.dshwolf')
   await brain.ensure()
   cleanup = () => rm(root, { recursive: true, force: true })
 })
@@ -43,7 +43,7 @@ test('buildSessionDigest includes STATUS, Do-Not-Repeat, bugs, anatomy pointer',
 
 test('buildSessionDigest respects the budget: low budget keeps only the top section', async () => {
   const r2 = await mkdtemp(join(tmpdir(), 'openwolf-digest-budget-'))
-  const b2 = new WolfBrain(r2, '.wolf')
+  const b2 = new WolfBrain(r2, '.dshwolf')
   await b2.ensure()
   try {
     await b2.writeStatus('# STATUS\n\n## 🚀 Next phase\n\n' + 'x'.repeat(6000) + '\n')

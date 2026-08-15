@@ -2,7 +2,7 @@
  * The standalone local dashboard server — an independent implementation of
  * the reference project's dashboard: binds 127.0.0.1, requires a token
  * (timing-safe) for every request, and serves a deep-linkable single-page
- * panel over the `.wolf/` brain data (tokens, context health, anatomy,
+ * panel over the `.dshwolf/` brain data (tokens, context health, anatomy,
  * handoff, bugs). Zero dependencies: node:http + node:crypto.
  *
  * @module dsh-openwolf/dashboard
@@ -208,7 +208,7 @@ function scanOptions(): ScanOptions {
     symbolBackend: 'auto',
     symbolThresholdTokens: 500,
     hidden: false,
-    extraIgnore: ['node_modules', '.git', 'dist', 'build', 'coverage', '.venv', '__pycache__', '.next', '.cache', '.turbo', '.idea', '.vscode', 'target', 'out', '*.log', 'AGENTS.md', '.wolf'],
+    extraIgnore: ['node_modules', '.git', 'dist', 'build', 'coverage', '.venv', '__pycache__', '.next', '.cache', '.turbo', '.idea', '.vscode', 'target', 'out', '*.log', 'AGENTS.md', '.dshwolf'],
     useGitignore: true,
     sortBy: 'path',
   }

@@ -11,7 +11,7 @@ let cleanup: () => Promise<void> = async () => {}
 
 before(async () => {
   root = await mkdtemp(join(tmpdir(), 'openwolf-brain-'))
-  brain = new WolfBrain(root, '.wolf')
+  brain = new WolfBrain(root, '.dshwolf')
   await brain.ensure()
   cleanup = () => rm(root, { recursive: true, force: true })
 })
@@ -20,10 +20,10 @@ after(async () => {
   await cleanup()
 })
 
-test('ensure creates the .wolf/ layout with defaults', async () => {
-  const status = await readFile(join(root, '.wolf/STATUS.md'), 'utf8')
+test('ensure creates the .dshwolf/ layout with defaults', async () => {
+  const status = await readFile(join(root, '.dshwolf/STATUS.md'), 'utf8')
   assert.match(status, /## 🚀 Next phase/)
-  const cerebrum = await readFile(join(root, '.wolf/cerebrum.md'), 'utf8')
+  const cerebrum = await readFile(join(root, '.dshwolf/cerebrum.md'), 'utf8')
   assert.match(cerebrum, /## Do-Not-Repeat/)
   const config = await brain.readConfig()
   assert.equal(config.openwolf.context.sessionDigestBudgetTokens, DEFAULT_CONFIG.openwolf.context.sessionDigestBudgetTokens)
@@ -57,7 +57,7 @@ test('appendMemory appends rows and stays append-only', async () => {
   await brain.appendMemory('write', ['src/a.ts'], 'ok', 120)
   await brain.appendMemory('edit', ['src/b.ts'], 'error', 40)
   await brain.flushMemory()
-  const memory = await readFile(join(root, '.wolf/memory.md'), 'utf8')
+  const memory = await readFile(join(root, '.dshwolf/memory.md'), 'utf8')
   const rows = memory.split('\n').filter((l) => l.startsWith('| 2'))
   assert.equal(rows.length, 2)
   assert.match(rows[0] ?? '', /write/)
@@ -144,7 +144,7 @@ test('recordSessionUsage upserts by session id', async () => {
 
 test('ledger caps retained rows at 500 while the counter keeps counting', async () => {
   const capRoot = await mkdtemp(join(tmpdir(), 'openwolf-ledger-cap-'))
-  const b2 = new WolfBrain(capRoot, '.wolf')
+  const b2 = new WolfBrain(capRoot, '.dshwolf')
   await b2.ensure()
   try {
     for (let i = 0; i < 520; i++) {
@@ -166,20 +166,20 @@ test('ledger caps retained rows at 500 while the counter keeps counting', async 
 })
 
 test('withLock serializes concurrent appends (no lost rows)', async () => {
-  const b2 = new WolfBrain(root, '.wolf')
+  const b2 = new WolfBrain(root, '.dshwolf')
   await Promise.all(
     Array.from({ length: 20 }, (_, i) => b2.appendMemory('write', [`f${i}.ts`], 'ok', i)),
   )
   await b2.flushMemory()
-  const memory = await readFile(join(root, '.wolf/memory.md'), 'utf8')
+  const memory = await readFile(join(root, '.dshwolf/memory.md'), 'utf8')
   const rows = memory.split('\n').filter((l) => /f\d+\.ts/.test(l))
   assert.equal(rows.length, 20)
 })
 
 test('withLock steals a stale lock', async () => {
-  const b2 = new WolfBrain(root, '.wolf')
+  const b2 = new WolfBrain(root, '.dshwolf')
   const { mkdir, utimes } = await import('node:fs/promises')
-  const lockPath = join(root, '.wolf/.lock')
+  const lockPath = join(root, '.dshwolf/.lock')
   await mkdir(lockPath)
   const old = new Date(Date.now() - 11_000)
   await utimes(lockPath, old, old)
@@ -226,7 +226,7 @@ test('syncAnatomy writes once, idempotent, and absorbs manual edits', async () =
   const second = await brain.syncAnatomy(map)
   assert.equal(second.changed, false, 'identical render is a no-op')
   // Human edit: append a note, then resync → absorb additively.
-  const anatomyPath = join(root, '.wolf/anatomy.md')
+  const anatomyPath = join(root, '.dshwolf/anatomy.md')
   const text = await readFile(anatomyPath, 'utf8')
   await writeFile(anatomyPath, `${text}\n## Human note\n\nkeep this\n`, 'utf8')
   const third = await brain.syncAnatomy({ ...map, scannedAt: Date.now() + 2 })

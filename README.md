@@ -128,7 +128,7 @@ dshwolf harness add web                   # wire + install into one profile expl
 ```
 
 > **Why this step exists.** The CLI and the harness plugin are two frontends
-> over the **same** `.wolf/` brain — what the CLI initializes (map, STATUS,
+> over the **same** `.dshwolf/` brain — what the CLI initializes (map, STATUS,
 > memory, buglog, ledger) is exactly what the harness reads. But a global
 > `npm install` is invisible to the harness: it only resolves packages
 > declared in your profile's `dependencies` (verified: a global copy is *not*
@@ -159,7 +159,7 @@ need a manual command) is in [Initialize and Keep It Fresh](#initialize-and-keep
 
 ## What It Creates
 
-The first scan creates a `.wolf/` directory in your workspace:
+The first scan creates a `.dshwolf/` directory in your workspace:
 
 | File | Purpose |
 |------|---------|
@@ -174,13 +174,23 @@ The first scan creates a `.wolf/` directory in your workspace:
 | `config.json` | Configuration, including the session-digest budget |
 | `OPENWOLF.md` | The operating protocol your agents follow |
 
+> **Why `.dshwolf/` and not `.wolf/`?** The original
+> [OpenWolf](https://github.com/cytostack/openwolf) (for Claude Code / Codex /
+> OpenCode / Gemini / Cursor) also uses a `.wolf/` brain. Keeping ours in a
+> separate `.dshwolf/` directory means both tools can manage the **same
+> workspace** without overwriting each other's config, ledger, or memory —
+> and a future OpenWolf update can never force a change here. Migrating from
+> this plugin's old `.wolf/` location (pre-0.9): `mv .wolf .dshwolf`.
+> (The file *formats* follow the OpenWolf behavioral spec — cerebrum,
+> STATUS, buglog, memory — so a project can adopt either or both brains.)
+
 ## Initialize and Keep It Fresh
 
 **Nothing needs manual setup** — the plugin initializes the brain lazily on
 its first use in a workspace and rescans automatically:
 
 - **First contact**: the first `wolf_*` tool call (or the first session with
-  `injectAgentsMd`) creates `.wolf/`, scans the workspace once, and injects
+  `injectAgentsMd`) creates `.dshwolf/`, scans the workspace once, and injects
   the map into `AGENTS.md`. No `init` step required.
 - **Auto-refresh**: a debounced watcher rescans on file changes; `write`/`edit`
   results re-analyze the single changed file immediately, so the map and
@@ -196,10 +206,10 @@ as tools inside a session):
 |---|---|---|
 | Rebuild the whole index from disk now | `dshwolf scan` | `wolf_refresh` |
 | Verify the index still matches the filesystem (CI-friendly) | `dshwolf scan --check` | `wolf_scan` |
-| Initialize `.wolf/` by hand (idempotent, rarely needed) | `dshwolf init` | `wolf_init` |
+| Initialize `.dshwolf/` by hand (idempotent, rarely needed) | `dshwolf init` | `wolf_init` |
 | Write/read the session handoff doc | `dshwolf status` | `wolf_status` |
 | Update every registered project (with backup first) | `dshwolf update` | — |
-| Roll back `.wolf/` from a timestamped backup | `dshwolf restore` | — |
+| Roll back `.dshwolf/` from a timestamped backup | `dshwolf restore` | — |
 | Schedule unattended rescans (zero token) | `dshwolf cron add … scan` | `wolf_schedule` |
 
 > **Tip**: you rarely need any of this — the plugin's job is to make the
@@ -346,7 +356,7 @@ Two skills register into the harness skill catalog:
 
 - **`wolf-security-audit`** — layered audit (dependencies → secrets →
   injection surfaces → authorization) ending in a severity-ranked report wired
-  into `.wolf/buglog.json`.
+  into `.dshwolf/buglog.json`.
 - **`wolf-reframe`** — the design brain. Pick or migrate a UI framework from a
   13-framework knowledge base, or audit/fix existing UI against an
   anti-generic design mandate: distinctiveness is an acceptance criterion, and
@@ -375,7 +385,7 @@ They are grouped by what you are trying to do:
 
 | Command | What it does | When to use it |
 |---|---|---|
-| `dshwolf init [dir]` | Create `.wolf/` (idempotent); `--agent <profile\|all\|deepseek-harness>` also wires + installs into the harness | Usually unnecessary — the brain initializes itself on first use; `--agent` is the one-command Way 2 setup |
+| `dshwolf init [dir]` | Create `.dshwolf/` (idempotent); `--agent <profile\|all\|deepseek-harness>` also wires + installs into the harness | Usually unnecessary — the brain initializes itself on first use; `--agent` is the one-command Way 2 setup |
 | `dshwolf scan [dir]` | Rebuild the project index, render `anatomy.md`, inject `AGENTS.md` | After a big change outside the harness (e.g. `git pull`) when you want the map rebuilt now |
 | `dshwolf scan --check [dir]` | Verify the index matches the filesystem (size/mtime + git HEAD) | CI or pre-session verification; exits 1 on drift |
 | `dshwolf status [dir]` | Brain health: config, scan state, ledger, memory/buglog counts | "Is my brain healthy?" |
@@ -392,7 +402,7 @@ They are grouped by what you are trying to do:
 
 | Command | What it does | When to use it |
 |---|---|---|
-| `dshwolf bug search <term>` | Search `.wolf/buglog.json` | Before re-debugging something that may already be fixed |
+| `dshwolf bug search <term>` | Search `.dshwolf/buglog.json` | Before re-debugging something that may already be fixed |
 | `dshwolf register [dir]` | Add the workspace to the global project registry | Enables `dshwolf update` across all your projects |
 | `dshwolf unregister [dir]` | Remove it from the registry | Cleanup |
 | `dshwolf update` | Backup + rescan every registered workspace | Refresh all indexed projects at once |
@@ -401,8 +411,8 @@ They are grouped by what you are trying to do:
 
 | Command | What it does | When to use it |
 |---|---|---|
-| `dshwolf backups [dir]` | List timestamped `.wolf/` backups | See what you can roll back to |
-| `dshwolf restore [dir] [tag]` | Restore `.wolf/` from a backup (newest by default) | After an experiment went wrong |
+| `dshwolf backups [dir]` | List timestamped `.dshwolf/` backups | See what you can roll back to |
+| `dshwolf restore [dir] [tag]` | Restore `.dshwolf/` from a backup (newest by default) | After an experiment went wrong |
 
 **Scheduling and serving**
 

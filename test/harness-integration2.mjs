@@ -58,10 +58,10 @@ const ok = (cond, label) => {
   console.log(`ok ${pass} - ${label}`)
 }
 
-// 1. wolf_init creates the .wolf/ brain.
+// 1. wolf_init creates the .dshwolf/ brain.
 const init = await call('wolf_init', {})
 ok(init.isError !== true, 'wolf_init succeeds')
-const brainEntries = await readdir(join(fixture, '.wolf'))
+const brainEntries = await readdir(join(fixture, '.dshwolf'))
 ok(brainEntries.includes('STATUS.md') && brainEntries.includes('buglog.json'), 'brain files created')
 
 // 2. wolf_status read + write round-trip.
@@ -73,7 +73,7 @@ ok(statusRead.value?.body.includes('ship the brain'), 'wolf_status reads back')
 // 3. wolf_learn records cerebrum knowledge.
 const learn = await call('wolf_learn', { section: 'Do-Not-Repeat', entry: 'never trust stale maps' })
 ok(learn.isError !== true, 'wolf_learn succeeds')
-const cerebrum = await readFile(join(fixture, '.wolf/cerebrum.md'), 'utf8')
+const cerebrum = await readFile(join(fixture, '.dshwolf/cerebrum.md'), 'utf8')
 ok(cerebrum.includes('never trust stale maps'), 'cerebrum updated')
 
 // 4. wolf_bug logs and searches.
@@ -104,9 +104,9 @@ ok(hintText2.includes('already read this session'), 'repeated read warns')
 // 8. Write interception logs to memory.md and tracks the session.
 const write = await call('write', { file_path: 'src/new.ts', content: 'export const n = 1\n' })
 ok(write.isError !== true, 'write succeeds')
-const memory = await readFile(join(fixture, '.wolf/memory.md'), 'utf8')
+const memory = await readFile(join(fixture, '.dshwolf/memory.md'), 'utf8')
 ok(memory.includes('src/new.ts') || memory.includes('write'), 'memory.md logs the write')
-const session = JSON.parse(await readFile(join(fixture, '.wolf/hooks/_session.json'), 'utf8'))
+const session = JSON.parse(await readFile(join(fixture, '.dshwolf/hooks/_session.json'), 'utf8'))
 ok(session.files_written.some((w) => w.file === 'src/new.ts'), 'session tracks written file')
 
 // 9. Secret files are never hinted.
@@ -125,13 +125,13 @@ ok(scanDrift.value?.drifted?.some((d) => d.path === 'src/index.ts'), 'drifted li
 // 11. anatomy.md is maintained after wolf_refresh.
 const refresh2 = await call('wolf_refresh', {})
 ok(refresh2.isError !== true, 'wolf_refresh for anatomy sync')
-const anatomy = await readFile(join(fixture, '.wolf/anatomy.md'), 'utf8')
+const anatomy = await readFile(join(fixture, '.dshwolf/anatomy.md'), 'utf8')
 ok(anatomy.includes('# Anatomy') && anatomy.includes('Files:'), 'anatomy.md rendered')
 
 // 12. wolf_schedule registers a zero-token cron task.
 const sched = await call('wolf_schedule', { add_name: 'nightly-scan', add_expr: '@daily', add_action: 'scan' })
 ok(sched.isError !== true && sched.value?.report.includes('scheduled'), 'wolf_schedule adds a task')
-const cronFile = JSON.parse(await readFile(join(fixture, '.wolf/cron-tasks.json'), 'utf8'))
+const cronFile = JSON.parse(await readFile(join(fixture, '.dshwolf/cron-tasks.json'), 'utf8'))
 ok(cronFile.tasks.length === 1 && cronFile.tasks[0]?.expr === '@daily', 'cron task persisted')
 const schedList = await call('wolf_schedule', {})
 ok(schedList.value?.tasks?.length === 1, 'wolf_schedule lists tasks')

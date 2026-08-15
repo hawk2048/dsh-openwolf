@@ -113,7 +113,7 @@ dshwolf harness status                    # 看看哪些 profile 已接线
 dshwolf harness add web                   # 显式接线 + 安装到某个 profile
 ```
 
-> **为什么需要这一步。** CLI 和 harness 插件是同一个 `.wolf/` 大脑的两个
+> **为什么需要这一步。** CLI 和 harness 插件是同一个 `.dshwolf/` 大脑的两个
 > 前端——CLI 初始化的内容（地图、STATUS、memory、buglog、账本）正是 harness
 > 读取的内容。但全局 `npm install` 对 harness **不可见**：harness 只解析你
 > profile `dependencies` 里声明的包（已实测：profile `node_modules` 解析不到
@@ -141,7 +141,7 @@ dshwolf harness add web                   # 显式接线 + 安装到某个 profi
 
 ## 它会创建什么
 
-首次扫描会在工作区创建 `.wolf/` 目录：
+首次扫描会在工作区创建 `.dshwolf/` 目录：
 
 | 文件 | 用途 |
 |------|------|
@@ -156,13 +156,22 @@ dshwolf harness add web                   # 显式接线 + 安装到某个 profi
 | `config.json` | 配置，包括会话摘要预算 |
 | `OPENWOLF.md` | agent 遵循的操作协议 |
 
+> **为什么用 `.dshwolf/` 而不是 `.wolf/`？** 原版
+> [OpenWolf](https://github.com/cytostack/openwolf)（面向 Claude Code /
+> Codex / OpenCode / Gemini / Cursor）也使用 `.wolf/` 大脑。我们把大脑放在
+> 独立的 `.dshwolf/` 目录，意味着两个工具可以管理**同一个工作区**而互不覆盖
+> 彼此的配置、账本或记忆——未来的 OpenWolf 更新也永远不会逼着这里跟着改。
+> 从本插件旧位置（0.9 之前）迁移：`mv .wolf .dshwolf`。（文件*格式*遵循
+> OpenWolf 行为规范——cerebrum、STATUS、buglog、memory——所以一个项目可以
+> 选择其中任一大脑或两者并用。）
+
 ## 初始化与保持新鲜
 
 **无需任何手动初始化**——插件在工作区的首次使用时惰性初始化大脑，之后自动
 重扫：
 
 - **首次接触**：第一次调用 `wolf_*` 工具（或第一个带 `injectAgentsMd` 的
-  会话）即创建 `.wolf/`、扫描一次工作区、把地图注入 `AGENTS.md`。不需要
+  会话）即创建 `.dshwolf/`、扫描一次工作区、把地图注入 `AGENTS.md`。不需要
   单独执行 init。
 - **自动刷新**：防抖 watcher 在文件变更时重扫；`write`/`edit` 结果立即
   重分析被改文件，地图和 `anatomy.md` 随你的工作保持新鲜。
@@ -175,10 +184,10 @@ dshwolf harness add web                   # 显式接线 + 安装到某个 profi
 |---|---|---|
 | 立刻从磁盘重建整个索引 | `dshwolf scan` | `wolf_refresh` |
 | 校验索引与文件系统一致（CI 友好） | `dshwolf scan --check` | `wolf_scan` |
-| 手动初始化 `.wolf/`（幂等，很少需要） | `dshwolf init` | `wolf_init` |
+| 手动初始化 `.dshwolf/`（幂等，很少需要） | `dshwolf init` | `wolf_init` |
 | 读写会话交接文档 | `dshwolf status` | `wolf_status` |
 | 更新所有已注册项目（先备份） | `dshwolf update` | — |
-| 从时间戳备份回滚 `.wolf/` | `dshwolf restore` | — |
+| 从时间戳备份回滚 `.dshwolf/` | `dshwolf restore` | — |
 | 定时无人值守重扫（零 token） | `dshwolf cron add … scan` | `wolf_schedule` |
 
 > **提示**：这些基本都不需要——插件的职责就是让大脑自我维护。只有当你
@@ -306,7 +315,7 @@ provider 上报合计）：
 两个技能注册进 harness 技能目录：
 
 - **`wolf-security-audit`** —— 分层审计（依赖 → 秘密 → 注入面 → 授权），
-  产出严重度排序报告并写入 `.wolf/buglog.json`。
+  产出严重度排序报告并写入 `.dshwolf/buglog.json`。
 - **`wolf-reframe`** —— 设计大脑。从 13 框架知识库挑选或迁移 UI 框架，或按
   反"AI 味"设计准则审计/修复现有 UI：独特性是验收标准，一眼可辨的 AI 生成
   外观是失败态。
@@ -331,7 +340,7 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `dshwolf init [dir]` | 创建 `.wolf/`（幂等）；`--agent <profile\|all\|deepseek-harness>` 同时接线 + 安装进 harness | 通常不需要——大脑首次使用时自动初始化；`--agent` 是方式 2 的一条命令初始化 |
+| `dshwolf init [dir]` | 创建 `.dshwolf/`（幂等）；`--agent <profile\|all\|deepseek-harness>` 同时接线 + 安装进 harness | 通常不需要——大脑首次使用时自动初始化；`--agent` 是方式 2 的一条命令初始化 |
 | `dshwolf scan [dir]` | 重建项目索引、渲染 `anatomy.md`、注入 `AGENTS.md` | 在 harness 之外做了大改动（如 `git pull`）想立刻重建地图 |
 | `dshwolf scan --check [dir]` | 校验索引与文件系统一致（size/mtime + git HEAD） | CI 或会话前校验；漂移退出码 1 |
 | `dshwolf status [dir]` | 大脑健康：配置、扫描状态、账本、memory/buglog 计数 | "我的大脑健康吗？" |
@@ -348,7 +357,7 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `dshwolf bug search <term>` | 搜索 `.wolf/buglog.json` | 重新排查可能已修复的问题之前 |
+| `dshwolf bug search <term>` | 搜索 `.dshwolf/buglog.json` | 重新排查可能已修复的问题之前 |
 | `dshwolf register [dir]` | 把工作区加进全局项目注册表 | 让 `dshwolf update` 覆盖你所有项目 |
 | `dshwolf unregister [dir]` | 从注册表移除 | 清理 |
 | `dshwolf update` | 备份 + 重扫所有已注册工作区 | 一次性刷新所有已索引项目 |
@@ -357,8 +366,8 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `dshwolf backups [dir]` | 列出时间戳 `.wolf/` 备份 | 看有哪些可回滚 |
-| `dshwolf restore [dir] [tag]` | 从备份恢复 `.wolf/`（默认最新） | 实验搞砸之后 |
+| `dshwolf backups [dir]` | 列出时间戳 `.dshwolf/` 备份 | 看有哪些可回滚 |
+| `dshwolf restore [dir] [tag]` | 从备份恢复 `.dshwolf/`（默认最新） | 实验搞砸之后 |
 
 **调度与服务**
 

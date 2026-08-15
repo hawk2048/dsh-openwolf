@@ -102,7 +102,7 @@ export async function buildSessionDigest(brain: WolfBrain, budget: number, estim
   if (dnr !== '') {
     const entries = dnr.split('\n').filter((l) => l.startsWith('- '))
     if (entries.length > 0) {
-      tryAdd(`## Do-Not-Repeat (from .wolf/cerebrum.md)\n${entries.slice(-10).join('\n')}`)
+      tryAdd(`## Do-Not-Repeat (from .dshwolf/cerebrum.md)\n${entries.slice(-10).join('\n')}`)
     }
   }
 
@@ -115,13 +115,13 @@ export async function buildSessionDigest(brain: WolfBrain, budget: number, estim
         const line = `${b.error_message} → ${b.fix}`
         return line.length > 140 ? `${line.slice(0, 137)}...` : line
       })
-    tryAdd(`## Known bugs already fixed (check .wolf/buglog.json before re-debugging)\n${recent.join('\n')}`)
+    tryAdd(`## Known bugs already fixed (check .dshwolf/buglog.json before re-debugging)\n${recent.join('\n')}`)
   }
 
   // 4. Anatomy pointer — the index itself stays on disk.
   const scanState = await brain.readScanState()
   if ((scanState.total_files ?? 0) > 0) {
-    tryAdd(`.wolf anatomy tracks ${scanState.total_files} files with descriptions + token sizes — consult it before reading whole files.`)
+    tryAdd(`.dshwolf anatomy tracks ${scanState.total_files} files with descriptions + token sizes — consult it before reading whole files.`)
   }
 
   return parts.join('\n\n')

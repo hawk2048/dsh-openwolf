@@ -15,7 +15,7 @@ before(async () => {
   dir = await mkdtemp(join(tmpdir(), 'openwolf-dash-'))
   await mkdir(join(dir, 'src'), { recursive: true })
   await writeFile(join(dir, 'src/app.ts'), 'export function app() { return 1 }\n')
-  brain = new WolfBrain(dir, '.wolf')
+  brain = new WolfBrain(dir, '.dshwolf')
   await brain.ensure()
   await brain.recordSessionUsage('sess-1', 'deepseek-v4-flash', 12345)
   server = await startDashboard({ brain, token: 'secret123', port: 0 })

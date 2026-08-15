@@ -30,7 +30,7 @@ test('dshwolf init creates the brain', async () => {
   const code = await main(['init', dir], io)
   assert.equal(code, 0)
   assert.match(out, /brain initialized/)
-  await assert.rejects(() => readFile(join(dir, '.wolf/config.json'), 'utf8').then(() => Promise.reject(new Error('missing'))), /missing/)
+  await assert.rejects(() => readFile(join(dir, '.dshwolf/config.json'), 'utf8').then(() => Promise.reject(new Error('missing'))), /missing/)
 })
 
 test('dshwolf init --agent deepseek-harness initializes brain AND wires the default profile', async () => {
@@ -119,9 +119,9 @@ test('dshwolf scan builds the index and pins state', async () => {
   const code = await main(['scan', dir], io)
   assert.equal(code, 0)
   assert.match(out, /scanned 2 files/)
-  const state = JSON.parse(await readFile(join(dir, '.wolf/hooks/_scan-state.json'), 'utf8'))
+  const state = JSON.parse(await readFile(join(dir, '.dshwolf/hooks/_scan-state.json'), 'utf8'))
   assert.equal(state.total_files, 2)
-  const anatomy = await readFile(join(dir, '.wolf/anatomy.md'), 'utf8')
+  const anatomy = await readFile(join(dir, '.dshwolf/anatomy.md'), 'utf8')
   assert.match(anatomy, /src\/app\.ts/)
 })
 
@@ -231,7 +231,7 @@ test('cron add rejects invalid expressions', async () => {
 })
 
 test('bug search finds logged bugs', async () => {
-  const brain = new WolfBrain(dir, '.wolf')
+  const brain = new WolfBrain(dir, '.dshwolf')
   await brain.ensure()
   await brain.logBug('TypeError: boom', 'added guard')
   out = ''
@@ -265,7 +265,7 @@ test('register/update/backups/restore round-trip with a test registry', async ()
 })
 
 test('init creates OPENWOLF.md protocol', async () => {
-  const protocol = await readFile(join(dir, '.wolf/OPENWOLF.md'), 'utf8')
+  const protocol = await readFile(join(dir, '.dshwolf/OPENWOLF.md'), 'utf8')
   assert.match(protocol, /Operating Protocol/)
   assert.match(protocol, /wolf_bug/)
 })

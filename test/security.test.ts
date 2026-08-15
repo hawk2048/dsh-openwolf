@@ -27,7 +27,7 @@ before(async () => {
   await writeFile(join(root, '.env'), 'API_KEY=supersecret\n')
   await writeFile(join(root, 'keys/id_rsa'), 'PRIVATE KEY\n')
   await writeFile(join(root, '.npmrc'), '//registry:token\n')
-  brain = new WolfBrain(root, '.wolf')
+  brain = new WolfBrain(root, '.dshwolf')
   await brain.ensure()
   cleanup = () => rm(root, { recursive: true, force: true })
 })
@@ -71,7 +71,7 @@ test('isSensitiveFile denylist covers secret shapes', () => {
 
 test('memory log never receives secret writes (write interception skip)', async () => {
   // Direct brain-level guard: sensitive basenames bypass the memory log.
-  const before = await readFile(join(root, '.wolf/memory.md'), 'utf8')
+  const before = await readFile(join(root, '.dshwolf/memory.md'), 'utf8')
   assert.ok(!before.includes('supersecret'), 'secret never logged')
 })
 

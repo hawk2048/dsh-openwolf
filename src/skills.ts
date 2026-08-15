@@ -14,14 +14,14 @@ export const securityAuditSkill: SkillRegistration = {
   name: 'wolf-security-audit',
   source: 'bundled',
   description:
-    'Layered security audit of the workspace — dependencies, secrets, injection surfaces, and authorization — ending in a severity-ranked report wired into .wolf/buglog.json.',
+    'Layered security audit of the workspace — dependencies, secrets, injection surfaces, and authorization — ending in a severity-ranked report wired into .dshwolf/buglog.json.',
   whenToUse:
     'Run before a release, after adding dependencies, or when reviewing code that handles untrusted input, credentials, or authorization.',
   content: `# Security Audit (dsh-openwolf)
 
 Audit the current workspace in four layers. For each layer, collect concrete
 findings with file:line references; finish with a severity-ranked report and
-wire every confirmed bug into \`.wolf/buglog.json\` with \`wolf_bug\`.
+wire every confirmed bug into \`.dshwolf/buglog.json\` with \`wolf_bug\`.
 
 ## Layer 1 — Dependencies
 

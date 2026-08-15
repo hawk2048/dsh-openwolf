@@ -12,15 +12,15 @@ Source of truth for this inventory: the published `openwolf@2.0.1` npm tarball (
 | A1 | **Session digest** | Budget-capped (default 1500 tok, per-agent budgets in `config.json`) context injected at SessionStart via `additionalContext`; priority order: STATUS.md 🚀 section → Do-Not-Repeat (last 10) → recent 5 bugs → anatomy pointer | `agent.inject()` / agent-instructions preload seam |
 | A2 | **Compaction survival** | PreCompact hook snapshots `_session.json`; SessionStart(source=`compact`) re-injects "files already modified this session" digest | need DSH compaction event seam (research) |
 | A3 | **Staleness detection** | anatomy scan pins `git HEAD` + `rescan_interval_hours` (default 6h); SessionStart warns "run scan before relying" | git rev-parse + config check in plugin |
-| A4 | **STATUS.md handoff** | end-of-phase doc, `## 🚀` section extracted into digest | workspace `.wolf/STATUS.md` + `wolf_status` tool |
-| A5 | **cerebrum.md** | learned preferences / corrections / Do-Not-Repeat list; freshness reminders (warn if <3 entries or >3 days old) | `.wolf/cerebrum.md` + reminders |
-| A6 | **memory.md** | chronological action log with token estimates, session header per session | `.wolf/memory.md` + write events |
-| A7 | **buglog.json** | bug-fix memory; searchable (`openwolf bug search`); empty-state reminder | `.wolf/buglog.json` + `wolf_bug` tool |
+| A4 | **STATUS.md handoff** | end-of-phase doc, `## 🚀` section extracted into digest | workspace `.dshwolf/STATUS.md` + `wolf_status` tool |
+| A5 | **cerebrum.md** | learned preferences / corrections / Do-Not-Repeat list; freshness reminders (warn if <3 entries or >3 days old) | `.dshwolf/cerebrum.md` + reminders |
+| A6 | **memory.md** | chronological action log with token estimates, session header per session | `.dshwolf/memory.md` + write events |
+| A7 | **buglog.json** | bug-fix memory; searchable (`openwolf bug search`); empty-state reminder | `.dshwolf/buglog.json` + `wolf_bug` tool |
 
 ### B. Project Anatomy
 | # | Feature | Mechanism | DSH seam |
 |---|---|---|---|
-| B1 | **anatomy-index.json** | durable per-file store: description, token estimate, content hash, size, mtime, symbols; cross-process lock; content-hash absorb of manual edits | `.wolf/anatomy-index.json` + lock (fs-safe) |
+| B1 | **anatomy-index.json** | durable per-file store: description, token estimate, content hash, size, mtime, symbols; cross-process lock; content-hash absorb of manual edits | `.dshwolf/anatomy-index.json` + lock (fs-safe) |
 | B2 | **anatomy.md** | human-readable render of the index | rendered view (reuse renderMap) |
 | B3 | **Symbol index** | files >500 est. tok index top-level symbols: kind/name/startLine/endLine/~tokens; langs TS/JS/Py/Go/Rust | v0.2 lezer backend + token estimate |
 | B4 | **Description extractor** | 49 KB per-language heuristics (route/controller detection, exports summary, schema detection, …) | port independently, or reuse summary heuristics + language-specific additions |
@@ -39,8 +39,8 @@ Source of truth for this inventory: the published `openwolf@2.0.1` npm tarball (
 ### D. Multi-agent
 OpenWolf wires 5 external agents (Claude Code / Codex / OpenCode / Gemini / Cursor) via their native hook/context mechanisms. **Not applicable to DSH** — DSH is the agent platform itself; the equivalent is "one brain for all DSH sessions/subagents", which the plugin architecture gives for free.
 
-### E. Init layout (`.wolf/`)
-`config.json` (per-agent budgets, rescan interval, dashboard port/token), `OPENWOLF.md` operating protocol, `hooks/` (7 zero-dep hooks). DSH equivalent: `config` schema (plugin config) + a `wolf_init` tool / first-run bootstrap that creates `.wolf/`.
+### E. Init layout (`.dshwolf/`)
+`config.json` (per-agent budgets, rescan interval, dashboard port/token), `OPENWOLF.md` operating protocol, `hooks/` (7 zero-dep hooks). DSH equivalent: `config` schema (plugin config) + a `wolf_init` tool / first-run bootstrap that creates `.dshwolf/`.
 
 ### F. Security
 Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpolation); realpath/symlink-safe traversal guards on cron file access; secret denylist; security regression tests.
@@ -71,7 +71,7 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 ## 3. Phased port plan
 
 ### P0 — Context core (v0.2) ✅ SHIPPED (0.2.0-rc.1)
-- ✅ `.wolf/` bootstrap (`wolf_init`) + `config.json` equivalent (per-agent budget, rescan interval) — `src/brain.ts`
+- ✅ `.dshwolf/` bootstrap (`wolf_init`) + `config.json` equivalent (per-agent budget, rescan interval) — `src/brain.ts`
 - ✅ **Session digest** (A1): STATUS 🚀 + Do-Not-Repeat + recent bugs + anatomy pointer, budget-capped, injected via `agent.inject()` on `agent/session-start` (startup/clear); **staleness warning** (A3, git-HEAD pin + age) — `src/digest.ts`
 - ✅ **Read interception** (B5/B6): `tools/post-execute` on `read` → repeated-read warning, anatomy hint + symbol line-range hints, staleness-suppressed, secret-excluded
 - ✅ **Write interception** (B7): `tools/post-execute` on `write`/`edit` → memory.md log + session tracking + single-file re-analysis
@@ -82,13 +82,13 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 ### P1 — Memory & measurement (v0.3) ✅ SHIPPED (0.3.0-rc.1)
 - ✅ Session housekeeping reminders (A5/A7): sparse cerebrum / empty buglog nudges via `agent.inject()` on session start
 - ✅ Token ledger measured (C1-C3): `turn/end` measures via `ctx.tokenMeter` and upserts by session id; `wolf_report` surfaces measured totals
-- ✅ Cross-process lock (B1): `.wolf/.lock` exclusive-create + stale steal around all brain read-modify-write ops
+- ✅ Cross-process lock (B1): `.dshwolf/.lock` exclusive-create + stale steal around all brain read-modify-write ops
 - ✅ Description extractor (B4): `src/description.ts` — language-aware summaries (exports, HTTP routes, zod schemas, python docstrings, go handlers, JSON metadata) with first-meaningful-line fallback, used for map entries and read hints
 - ✅ Tests: +8 description, +3 brain (lock/steal/upsert); published as `dsh-openwolf@0.3.0-rc.1` (npm tag `rc`)
 
 ### P2 — Anatomy engine parity (v0.4) ✅ SHIPPED (0.4.0-rc.1)
 - ✅ Symbol backend (B3): `symbolBackend: auto|regex|lezer` — pure-JS lezer grammars (TS/JS, Python, Go, Rust, Java) extract top-level declarations with exact line spans + per-symbol token estimates; regex fallback; backend parity tests
-- ✅ anatomy.md (B2): `.wolf/anatomy.md` human-readable index view synced on rescan; content-hash detection absorbs manual edits additively
+- ✅ anatomy.md (B2): `.dshwolf/anatomy.md` human-readable index view synced on rescan; content-hash detection absorbs manual edits additively
 - ✅ Integrity check: `wolf_scan` (read-only, CI-friendly) — cached index vs filesystem size/mtime drift + git HEAD pin
 - ✅ Post-write incremental updates (B7): single-file re-analysis now keeps per-directory aggregates in sync
 - ✅ Tests: +lezer golden/parity, +anatomy render/absorb, +dirs aggregates, +wolf_scan drift (54 unit + 36 integration); published as `dsh-openwolf@0.4.0-rc.1` and promoted to `latest`
@@ -102,9 +102,9 @@ Dashboard binds 127.0.0.1 + timing-safe token; arg arrays only (no shell interpo
 **→ The full OpenWolf v2.0.1 feature set (A1-A7, B1-B8, C1-C3, E-H) is now replicated as a native DSH plugin, including the completion pass: P0 0.2.0-rc.1 · P1 0.3.0-rc.2 · P2 0.4.0-rc.1 · P3 0.5.0-rc.2 · P4 (completion) 0.6.0-rc.1 (latest).**
 
 ### P4 — Completion pass (v0.6) ✅ SHIPPED (0.6.0-rc.3)
-- ✅ Cron system (H2): zero-dep 5-field parser/matcher (+ `@` shorthands, month/weekday names), minute-anchored timer + in-flight guard, durable tasks (`.wolf/cron-tasks.json`), CLI `cron add/list/run/remove`, `wolf_schedule` tool (model registers zero-token tasks), daemon `serve`
+- ✅ Cron system (H2): zero-dep 5-field parser/matcher (+ `@` shorthands, month/weekday names), minute-anchored timer + in-flight guard, durable tasks (`.dshwolf/cron-tasks.json`), CLI `cron add/list/run/remove`, `wolf_schedule` tool (model registers zero-token tasks), daemon `serve`
 - ✅ Project registry + update/restore: `~/.dsh-wolf-registry.json` (env-overridable), `register`/`unregister`/`update` (backup + rescan)/`backups`/`restore [tag]`
-- ✅ **B1 durable anatomy index**: `.wolf/anatomy-index.json` per-file entries; incremental refresh re-analyzes only drifted files (cold-start + dashboard no longer full-scan)
+- ✅ **B1 durable anatomy index**: `.dshwolf/anatomy-index.json` per-file entries; incremental refresh re-analyzes only drifted files (cold-start + dashboard no longer full-scan)
 - ✅ **F security regression suite**: traversal matrix, dashboard auth (both transports), secret denylist full-pipeline, no-shell-interpolation source audit — caught 2 real denylist bugs
 - ✅ `bug search` CLI; `OPENWOLF.md` protocol; dashboard panels (overview/activity/cron); symbol hints sorted by token size
 - ✅ Tests: 84 unit + 40 integration

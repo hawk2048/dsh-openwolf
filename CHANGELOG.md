@@ -5,6 +5,23 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.9.0] — 2026-08-15
+
+### Changed (breaking-ish)
+
+- **Brain directory renamed `.wolf/` → `.dshwolf/` (default).** The original
+  OpenWolf (for Claude Code / Codex / OpenCode / Gemini / Cursor) also keeps
+  its brain in `.wolf/`; isolating ours in `.dshwolf/` lets both tools manage
+  the same workspace without overwriting each other's config, token ledger,
+  or memory, and decouples us from future OpenWolf schema changes. New
+  constant `DEFAULT_BRAIN_DIR` in `src/brain.ts`; plugin `brainDir` default,
+  CLI (`WolfBrain` ctor, daemon pid path, usage/help texts), backups
+  (`.dshwolf-backups/`), scanner/dashboard ignore lists, digest and skill
+  prose, `cordis.patch.yml`, and all tests now use `.dshwolf/`. The
+  read-interception denylist now honors the configured `brainDir` instead of
+  a hardcoded `.wolf/`. Migration from the old location:
+  `mv .wolf .dshwolf`.
+
 ## [0.8.13] — 2026-08-15
 
 ### Added
@@ -340,6 +357,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.9.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.9.0
 [0.8.13]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.13
 [0.8.12]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.12
 [0.8.11]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.11
