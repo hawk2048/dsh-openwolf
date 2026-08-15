@@ -181,6 +181,7 @@ function scanOptions(): ScanOptions {
     maxFileBytes: 65536,
     symbols: true,
     symbolBackend: 'auto',
+    symbolThresholdTokens: 500,
     hidden: false,
     extraIgnore: ['node_modules', '.git', 'dist', 'build', 'coverage', '.venv', '__pycache__', '.next', '.cache', '.turbo', '.idea', '.vscode', 'target', 'out', '*.log', 'AGENTS.md', '.wolf'],
     useGitignore: true,

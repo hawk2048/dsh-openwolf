@@ -37,18 +37,29 @@ export function extractSection(markdown: string, headingPattern: RegExp): string
   return out.join('\n').trim()
 }
 
-/** Latest git HEAD for a workspace, or null when not a git repo / git absent. */
+/** TTL cache for git HEAD lookups (each spawn costs ~50-100ms; keep them rare). */
+const HEAD_TTL_MS = 30_000
+const headCache = new Map<string, { head: string | null; at: number }>()
+
+/** Latest git HEAD for a workspace (cached 30s), or null when not a git repo. */
 export async function currentGitHead(root: string): Promise<string | null> {
+  const cached = headCache.get(root)
+  if (cached !== undefined && Date.now() - cached.at < HEAD_TTL_MS) {
+    return cached.head
+  }
+  let head: string | null = null
   try {
     const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
       cwd: root,
       timeout: 2000,
       windowsHide: true,
     })
-    return stdout.trim()
+    head = stdout.trim()
   } catch {
-    return null
+    head = null
   }
+  headCache.set(root, { head, at: Date.now() })
+  return head
 }
 
 /** Why the anatomy scan state is stale, or null when fresh. */

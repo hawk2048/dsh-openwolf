@@ -103,6 +103,16 @@ P2 = nice-to-have.
 ## 3. 结论
 
 复刻度：**核心 100%，全量 ~95%**（B1 持久索引、F 安全回归套件为已知部分项）。
-优化优先级建议：**P0 = dashboard 扫描缓存 + memory.md 追加批量 + 安全回归套件**；
-P1 = 扫描并发、git HEAD TTL、digest 用 tokenMeter、CLI --json、daemon --token-file；
-P2 = CI、可选 lezer 依赖、SSE、会话状态剪枝、账本保留上限。
+
+### v0.7 优化轮实测结果（2026-08-15）
+
+| 优化 | 实测（200 文件 fixture / 20 次调用） | 结论 |
+| --- | --- | --- |
+| 扫描并发池（8 workers） | 并发 55ms vs 串行 94ms → **1.71x** | I/O 并行有效；小文件瓶颈在 lezer 同步解析 |
+| **小文件跳过 lezer**（<`symbolThresholdTokens` 用 regex） | 整体 161ms → **55ms（2.9x）** | 主要提速来源，与 OpenWolf ">500 tok 才索引符号" 对齐 |
+| git HEAD TTL（30s） | 20 次共 80ms（1 次 spawn + 19 命中） | 原为 ~20×60ms ≈ 1.2s |
+| memory.md 批量追加 | ≥16 行或 2s 冲刷，一次落盘 | 突发写从 N 次全文件重写 → 1 次 |
+| CLI `--json` | status/report/scan --check | 机器可读输出 |
+| GitHub Actions CI | node 20/22/24 × ubuntu/windows | install+typecheck+test+pack |
+
+优化优先级更新：**P0 完成（dashboard 缓存、memory 批量、安全套件）**；P1 完成（扫描并发+阈值、git HEAD TTL、CLI --json）；剩余 P1/P2：digest 预算用 tokenMeter、daemon `--token-file`、可选 lezer 依赖、SSE、会话状态剪枝、账本保留上限。

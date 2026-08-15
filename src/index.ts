@@ -131,6 +131,7 @@ function scanOptionsOf(config: Config): ScanOptions {
     maxFileBytes: config.maxFileBytes,
     symbols: config.symbols,
     symbolBackend: config.symbolBackend,
+    symbolThresholdTokens: config.symbolThresholdTokens,
     hidden: config.hidden,
     // The instruction file carries the map block and the brain dir is
     // infrastructure — both stay out of the map.
@@ -264,6 +265,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.effect(() => () => {
     for (const [, entry] of cache) void entry.watcher?.close()
     for (const timer of timers) clearTimeout(timer)
+    for (const brain of brains.values()) void brain.flushMemory().catch(() => {})
     cache.clear()
     brains.clear()
     timers.clear()

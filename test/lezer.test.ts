@@ -9,6 +9,7 @@ import type { ScanOptions } from '../src/types.ts'
 
 const baseOpts: ScanOptions = {
   maxFiles: 500, maxFileBytes: 1 << 20, symbols: true, symbolBackend: 'auto',
+  symbolThresholdTokens: 0, // always run lezer in the parity test
   hidden: false, extraIgnore: ['node_modules'], useGitignore: true, sortBy: 'path',
 }
 

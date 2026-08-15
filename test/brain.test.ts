@@ -56,6 +56,7 @@ test('appendCerebrum inserts under an existing section and creates new ones', as
 test('appendMemory appends rows and stays append-only', async () => {
   await brain.appendMemory('write', ['src/a.ts'], 'ok', 120)
   await brain.appendMemory('edit', ['src/b.ts'], 'error', 40)
+  await brain.flushMemory()
   const memory = await readFile(join(root, '.wolf/memory.md'), 'utf8')
   const rows = memory.split('\n').filter((l) => l.startsWith('| 2'))
   assert.equal(rows.length, 2)
@@ -123,6 +124,7 @@ test('withLock serializes concurrent appends (no lost rows)', async () => {
   await Promise.all(
     Array.from({ length: 20 }, (_, i) => b2.appendMemory('write', [`f${i}.ts`], 'ok', i)),
   )
+  await b2.flushMemory()
   const memory = await readFile(join(root, '.wolf/memory.md'), 'utf8')
   const rows = memory.split('\n').filter((l) => /f\d+\.ts/.test(l))
   assert.equal(rows.length, 20)

@@ -113,6 +113,8 @@ export interface ScanOptions {
   symbols: boolean
   /** Symbol backend: `auto` (lezer when available) | `regex` | `lezer`. */
   symbolBackend: SymbolBackend
+  /** Files below this estimated token count skip lezer (regex only). */
+  symbolThresholdTokens: number
   /** Include dot-files and dot-directories (`.git` is always excluded). */
   hidden: boolean
   /** Extra ignore patterns (gitignore-lite syntax). */

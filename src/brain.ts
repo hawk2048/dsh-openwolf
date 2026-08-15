@@ -293,13 +293,30 @@ This workspace runs a code-map second brain in \`.wolf/\`. Follow this protocol:
     })
   }
 
+  private memoryBuffer: string[] = []
+  private lastMemoryFlush = 0
+
   async appendMemory(action: string, files: string[], outcome = 'ok', tokens = 0): Promise<void> {
+    const now = new Date()
+    const stamp = `${now.toISOString().slice(0, 10)} ${now.toTimeString().slice(0, 5)}`
+    const filesCell = files.slice(0, 4).join(', ') + (files.length > 4 ? ` +${files.length - 4}` : '')
+    this.memoryBuffer.push(`| ${stamp} | ${action.replace(/\|/g, '\\|')} | \`${filesCell}\` | ${outcome} | ${tokens} |\n`)
+    const elapsed = Date.now() - this.lastMemoryFlush
+    // Batch bursts (≥16 rows) and keep single writes durable within 2s.
+    if (this.memoryBuffer.length >= 16 || elapsed >= 2000) {
+      await this.flushMemory()
+    }
+  }
+
+  /** Write buffered memory rows to disk (one locked append). */
+  async flushMemory(): Promise<void> {
+    const batch = this.memoryBuffer
+    if (batch.length === 0) return
+    this.memoryBuffer = []
+    this.lastMemoryFlush = Date.now()
     await this.withLock(async () => {
-      const now = new Date()
-      const stamp = `${now.toISOString().slice(0, 10)} ${now.toTimeString().slice(0, 5)}`
-      const filesCell = files.slice(0, 4).join(', ') + (files.length > 4 ? ` +${files.length - 4}` : '')
-      const row = `| ${stamp} | ${action.replace(/\|/g, '\\|')} | \`${filesCell}\` | ${outcome} | ${tokens} |\n`
-      await this.writeText(join(this.dir, 'memory.md'), `${(await this.readText(join(this.dir, 'memory.md'))).trimEnd()}\n${row}`)
+      const path = join(this.dir, 'memory.md')
+      await this.writeText(path, `${(await this.readText(path)).trimEnd()}\n${batch.join('')}`)
     })
   }
 

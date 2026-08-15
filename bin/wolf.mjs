@@ -25,6 +25,7 @@ function scanOptions() {
     maxFileBytes: 65536,
     symbols: true,
     symbolBackend: 'auto',
+    symbolThresholdTokens: 500,
     hidden: false,
     extraIgnore: ['node_modules', '.git', 'dist', 'build', 'coverage', '.venv', '__pycache__', '.next', '.cache', '.turbo', '.idea', '.vscode', 'target', 'out', '*.log', 'AGENTS.md', '.wolf'],
     useGitignore: true,
@@ -142,28 +143,31 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
           const st = await stat(join(dir, entry.path))
           const sizeChanged = st.size !== entry.size
           const mtimeChanged = Math.abs(st.mtimeMs - entry.mtimeMs) >= 1
-          if (sizeChanged || mtimeChanged) drift.push(`${entry.path}${sizeChanged ? ' (size)' : ''}${mtimeChanged ? ' (mtime)' : ''}`)
+          if (sizeChanged || mtimeChanged) drift.push({ path: entry.path, sizeChanged, mtimeChanged })
         } catch {
-          drift.push(`${entry.path} (missing)`)
+          drift.push({ path: entry.path, sizeChanged: true, mtimeChanged: true })
         }
       }
       // Fresh scan to catch new files (the harness cache does this in memory).
       const fresh = await scanCodebase(dir, scanOptions())
       const freshPaths = new Set(fresh.files.map((f) => f.path))
       for (const p of freshPaths) {
-        if (!seen.has(p)) drift.push(`${p} (new)`)
+        if (!seen.has(p)) drift.push({ path: p, sizeChanged: false, mtimeChanged: false })
       }
       const state = await brain.readScanState()
       const head = await currentGitHead(dir)
-      if (state.git_head !== undefined && head !== null && state.git_head !== head) {
-        drift.push('git HEAD moved since last scan')
+      const gitHeadMoved = state.git_head !== undefined && head !== null && state.git_head !== head
+      if (gitHeadMoved) drift.push({ path: 'git HEAD', sizeChanged: false, mtimeChanged: false })
+      if (rest.includes('--json')) {
+        io.out(JSON.stringify({ dir, fresh: drift.length === 0, drifted: drift, gitHeadMoved }))
+        return drift.length === 0 ? 0 : 1
       }
       if (drift.length === 0) {
         io.out('INDEX FRESH — manifest matches the filesystem')
         return 0
       }
       const stale = await anatomyStaleReason(brain, 6)
-      io.err(`index drifted (${drift.length}):\n${drift.map((d) => `  - ${d}`).join('\n')}${stale !== null ? `\n  ⚠ ${stale}` : ''}`)
+      io.err(`index drifted (${drift.length}):\n${drift.map((d) => `  - ${d.path}${d.sizeChanged ? ' (size)' : ''}${d.mtimeChanged ? ' (mtime)' : ''}`).join('\n')}${stale !== null ? `\n  ⚠ ${stale}` : ''}`)
       return 1
     }
     case 'status': {
@@ -172,6 +176,16 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       const state = await brain.readScanState()
       const ledger = await brain.readLedger()
       const buglog = await brain.readBuglog()
+      if (rest.includes('--json')) {
+        io.out(JSON.stringify({
+          dir, digestBudget: config.openwolf.context.sessionDigestBudgetTokens,
+          rescanHours: config.openwolf.anatomy.rescanIntervalHours,
+          lastScanned: state.last_scanned ?? null, gitHead: state.git_head ?? null,
+          totalFiles: state.total_files ?? 0, sessions: ledger.lifetime.total_sessions,
+          bugs: buglog.bugs.length,
+        }))
+        return 0
+      }
       io.out(
         [
           `brain: ${join(dir, '.wolf')}`,
@@ -187,6 +201,14 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       await brain.ensure()
       const ledger = await brain.readLedger()
       const measured = ledger.sessions.reduce((s, x) => s + (x.measured_tokens ?? 0), 0)
+      if (rest.includes('--json')) {
+        io.out(JSON.stringify({
+          sessions: ledger.lifetime.total_sessions,
+          measuredTokens: measured,
+          recent: ledger.sessions.slice(-3).map((s) => ({ id: s.session_id.slice(0, 8), agent: s.agent ?? null, tokens: s.measured_tokens ?? 0 })),
+        }))
+        return 0
+      }
       io.out(
         [
           `token ledger: ${ledger.lifetime.total_sessions} sessions`,

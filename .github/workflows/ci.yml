@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [20, 22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit + integration tests
+        run: node --test "test/*.test.ts"
+
+      - name: Integration harness tests
+        run: node test/harness-integration.mjs && node test/harness-integration2.mjs
+
+      - name: Package sanity (tarball contents)
+        run: |
+          npm pack --dry-run --json > pack.json
+          node -e "const j=require('./pack.json')[0]; const f=j.files.map(x=>x.path); for (const need of ['lib/index.js','cordis.patch.yml','bin/wolf.mjs','README.md']) { if (!f.includes(need)) { console.error('missing '+need); process.exit(1) } } console.log('pack ok: '+f.length+' files')"

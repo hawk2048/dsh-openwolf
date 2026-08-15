@@ -55,7 +55,10 @@ async function extractHits(filePath: string, text: string, opts: ScanOptions): P
   if (!opts.symbols) return []
   const lang = detectLang(filePath)
   const backend = opts.symbolBackend ?? 'auto'
-  if (backend === 'lezer' || (backend === 'auto' && lezerAvailableFor(filePath))) {
+  // OpenWolf parity: symbol-index only files above the token threshold — the
+  // lezer parse is CPU-bound, so small files use the cheap regex backend.
+  const underThreshold = text.length < (opts.symbolThresholdTokens ?? 500) * 4
+  if (backend === 'lezer' || (backend === 'auto' && lezerAvailableFor(filePath) && !underThreshold)) {
     const lezerHits = await extractSymbolsLezer(text, filePath, MAX_SYMBOLS_PER_FILE)
     if (lezerHits.length > 0) {
       return lezerHits.map((h) => ({ name: h.name, line: h.line, endLine: h.endLine, tokens: h.tokens }))
@@ -108,6 +111,25 @@ export async function analyzeFile(filePath: string, size: number, mtimeMs: numbe
   return analyzeText(filePath, buf.toString('utf8'), mtimeMs, opts)
 }
 
+/** Bounded-concurrency map over an async mapper (worker pool). */
+export async function poolMap<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let next = 0
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    for (;;) {
+      const i = next++
+      if (i >= items.length) return
+      try {
+        out[i] = await fn(items[i]!)
+      } catch {
+        // per-item failures must not kill the pool; callers handle absent results
+      }
+    }
+  })
+  await Promise.all(workers)
+  return out
+}
+
 /** List workspace-relative file paths honoring ignore rules (no analysis). */
 export async function walkFiles(root: string, opts: ScanOptions): Promise<string[]> {
   const ignore = await buildIgnoreContext(root, opts)
@@ -142,6 +164,9 @@ export interface IndexBaseline {
   totalLines: number
 }
 
+/** Analysis worker count for the bounded-concurrency pool. */
+const SCAN_CONCURRENCY = 8
+
 /**
  * Refresh a workspace map from a durable index: reuse entries whose
  * size+mtime still match, re-analyze only drifted files, add new files,
@@ -154,29 +179,34 @@ export async function refreshMapFromIndex(
 ): Promise<{ map: CodeMap; reused: number; analyzed: number }> {
   const started = Date.now()
   const paths = await walkFiles(root, opts)
-  const files: FileEntry[] = []
-  let reused = 0
-  let analyzed = 0
+  const base = root.replace(/[\\/]+$/, '')
   const indexed = new Map((index?.files ?? []).map((f) => [f.path, f]))
+  const work: Array<{ rel: string; entry: FileEntry | null }> = []
+  let reused = 0
   for (const rel of paths) {
-    const abs = `${root.replace(/[\\/]+$/, '')}/${rel}`
     let st
     try {
-      st = await stat(abs)
+      st = await stat(`${base}/${rel}`)
     } catch {
       continue // vanished mid-walk
     }
     const prev = indexed.get(rel)
     if (prev !== undefined && prev.size === st.size && prev.mtimeMs !== undefined && Math.abs(st.mtimeMs - prev.mtimeMs) < 1) {
-      files.push(prev) // unchanged: reuse without re-reading
+      work.push({ rel, entry: prev }) // unchanged: reuse without re-reading
       reused++
     } else {
-      const entry = await analyzeFile(abs, st.size, st.mtimeMs, opts)
-      entry.path = rel
-      files.push(entry)
-      analyzed++
+      work.push({ rel, entry: null })
     }
   }
+  const analyzedEntries = await poolMap(work.filter((w) => w.entry === null), SCAN_CONCURRENCY, async (w) => {
+    const st = await stat(`${base}/${w.rel}`)
+    const entry = await analyzeFile(`${base}/${w.rel}`, st.size, st.mtimeMs, opts)
+    entry.path = w.rel
+    return entry
+  })
+  const analyzedByPath = new Map(analyzedEntries.map((e) => [e.path, e]))
+  const files: FileEntry[] = work.map((w) => w.entry ?? analyzedByPath.get(w.rel)!).filter((e) => e !== undefined)
+  const analyzed = analyzedEntries.length
   const totalLines = files.reduce((s, f) => s + f.lines, 0)
   const totalBytes = files.reduce((s, f) => s + f.size, 0)
   const map: CodeMap = {
@@ -198,13 +228,12 @@ export async function refreshMapFromIndex(
 /**
  * Scan a workspace root into a compact {@link CodeMap}. Ignores `.git` and
  * any path matched by the configured rules; stops early at `maxFiles`.
+ * File analysis runs in a bounded-concurrency pool.
  */
 export async function scanCodebase(root: string, opts: ScanOptions): Promise<CodeMap> {
   const started = Date.now()
   const ignore = await buildIgnoreContext(root, opts)
-  const files: FileEntry[] = []
-  let totalLines = 0
-  let totalBytes = 0
+  const candidates: Array<{ abs: string; rel: string; size: number; mtimeMs: number }> = []
   let skippedFiles = 0
   let truncated = false
   let scanned = 0
@@ -238,23 +267,28 @@ export async function scanCodebase(root: string, opts: ScanOptions): Promise<Cod
           continue
         }
         scanned++
-        let size = 0
-        let mtimeMs = 0
         try {
           const st = await stat(`${dirAbs}/${entry.name}`)
-          size = st.size
-          mtimeMs = st.mtimeMs
+          candidates.push({ abs: `${dirAbs}/${entry.name}`, rel: toPosix(rel), size: st.size, mtimeMs: st.mtimeMs })
         } catch {
           skippedFiles++
-          continue
         }
-        const fileEntry = await analyzeFile(`${dirAbs}/${entry.name}`, size, mtimeMs, opts)
-        fileEntry.path = toPosix(rel)
-        files.push(fileEntry)
-        totalLines += fileEntry.lines
-        totalBytes += fileEntry.size
       }
     }
+  }
+
+  const analyzed = await poolMap(candidates, SCAN_CONCURRENCY, (c) =>
+    analyzeFile(c.abs, c.size, c.mtimeMs, opts).then((entry) => {
+      entry.path = c.rel
+      return entry
+    }),
+  )
+  const files = analyzed.filter((e): e is FileEntry => e !== undefined)
+  let totalLines = 0
+  let totalBytes = 0
+  for (const f of files) {
+    totalLines += f.lines
+    totalBytes += f.size
   }
 
   if (opts.sortBy === 'size') {
