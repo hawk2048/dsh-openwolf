@@ -9,6 +9,8 @@ import { scanCodebase } from '../lib/scanner.js'
 import { injectBlock } from '../lib/render.js'
 import { currentGitHead, anatomyStaleReason } from '../lib/digest.js'
 import { startDashboard } from '../lib/dashboard.js'
+import { parseCron, dueTasks } from '../lib/cron.js'
+import { listProjects, registerProject, unregisterProject, backupBrain, listBackups, restoreBrain } from '../lib/registry.js'
 import { stat, readFile, writeFile, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
@@ -30,10 +32,13 @@ function scanOptions() {
   }
 }
 
-/** Resolve the target directory from argv (first non-flag arg) or cwd. */
+/** Resolve the target directory: `--dir=` flag wins, else the LAST non-flag arg. */
 function resolveDir(argv) {
-  const arg = argv.find((a) => !a.startsWith('-'))
-  return arg !== undefined ? resolve(process.cwd(), arg) : process.cwd()
+  const flagged = argv.find((a) => a.startsWith('--dir='))
+  if (flagged !== undefined) return resolve(process.cwd(), flagged.slice(6))
+  const positional = argv.filter((a) => !a.startsWith('-'))
+  const last = positional.at(-1)
+  return last !== undefined ? resolve(process.cwd(), last) : process.cwd()
 }
 
 const USAGE = `usage:
@@ -42,9 +47,50 @@ const USAGE = `usage:
   wolf scan --check [dir]     verify index vs filesystem (CI-friendly; exit 1 on drift)
   wolf status [dir]           brain health: config, scan state, ledger, memory/buglog
   wolf report [dir]           token ledger summary
+  wolf bug search <term>      search the buglog
+  wolf cron add <name> '<expr>' <scan|check> [dir]
+  wolf cron list [dir]        list scheduled tasks
+  wolf cron run <id> [dir]    run one task now
+  wolf cron remove <id> [dir]
+  wolf register [dir]         add workspace to the global registry
+  wolf unregister [dir]       remove workspace from the registry
+  wolf update                 backup + rescan every registered workspace
+  wolf backups [dir]          list timestamped .wolf backups
+  wolf restore [dir] [tag]    restore .wolf from a backup (newest by default)
   wolf dashboard [dir]        local dashboard server (--port, --token)
-  wolf daemon start [dir]     dashboard as a background daemon (--port, --token)
+  wolf daemon start [dir]     dashboard + cron scheduler as a background daemon
   wolf daemon stop [dir]      stop the daemon`
+
+/** Run one cron action against a workspace. */
+async function runCronAction(dir, action, io) {
+  const brain = new WolfBrain(dir, '.wolf')
+  await brain.ensure()
+  if (action === 'check') {
+    const manifest = await brain.readScanManifest()
+    if (manifest.files.length === 0) return { ok: false, detail: 'no manifest' }
+    let drift = 0
+    for (const entry of manifest.files) {
+      try {
+        const st = await stat(join(dir, entry.path))
+        if (st.size !== entry.size || Math.abs(st.mtimeMs - entry.mtimeMs) >= 1) drift++
+      } catch {
+        drift++
+      }
+    }
+    return { ok: drift === 0, detail: drift === 0 ? 'fresh' : `${drift} drifted` }
+  }
+  // scan
+  const map = await scanCodebase(dir, scanOptions())
+  await brain.writeScanState({
+    last_scanned: new Date().toISOString(),
+    git_head: (await currentGitHead(dir)) ?? undefined,
+    total_files: map.totalFiles,
+    total_lines: map.totalLines,
+  })
+  await brain.writeScanManifest(map.files.map((f) => ({ path: f.path, size: f.size, mtimeMs: f.mtimeMs ?? 0 })))
+  await brain.syncAnatomy(map)
+  return { ok: true, detail: `${map.totalFiles} files` }
+}
 
 function flag(rest, name, fallback) {
   const hit = rest.find((a) => a.startsWith(`--${name}=`))
@@ -148,6 +194,156 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       )
       return 0
     }
+    case 'bug': {
+      if (rest[0] !== 'search' || rest[1] === undefined) {
+        io.err('usage: wolf bug search <term> [--dir=X]')
+        return 2
+      }
+      // bug search has no positional dir (free-text terms); use --dir= or cwd.
+      const searchDir = flag(rest, 'dir', process.cwd())
+      const searchBrain = new WolfBrain(resolve(searchDir), '.wolf')
+      await searchBrain.ensure()
+      const term = rest.slice(1).filter((a) => !a.startsWith('-')).join(' ')
+      const hits = await searchBrain.searchBugs(term)
+      if (hits.length === 0) {
+        io.out('no matching bugs')
+        return 0
+      }
+      io.out(hits.map((b) => `- ${b.error_message} → ${b.fix}${b.file !== undefined ? ` (${b.file})` : ''}`).join('\n'))
+      return 0
+    }
+    case 'cron': {
+      const sub = rest[0]
+      if (sub === 'add') {
+        const [name, expr, action] = rest.slice(1)
+        if (name === undefined || expr === undefined || (action !== 'scan' && action !== 'check')) {
+          io.err("usage: wolf cron add <name> '<expr>' <scan|check>")
+          return 2
+        }
+        try {
+          parseCron(expr) // validate
+        } catch (e) {
+          io.err(`invalid cron: ${e instanceof Error ? e.message : e}`)
+          return 2
+        }
+        await brain.ensure()
+        const id = `task-${Date.now().toString(36)}`
+        await brain.upsertCronTask({
+          id, name, expr, action, enabled: true,
+          created_at: new Date().toISOString(),
+        })
+        io.out(`added cron task ${id} (${name}: ${expr} → ${action})`)
+        return 0
+      }
+      if (sub === 'list') {
+        await brain.ensure()
+        const tasks = await brain.readCronTasks()
+        if (tasks.length === 0) {
+          io.out('no cron tasks')
+          return 0
+        }
+        io.out(tasks.map((t) => `- ${t.id} ${t.name} "${t.expr}" ${t.action} ${t.enabled ? 'enabled' : 'disabled'}${t.last_run !== undefined ? ` · last ${t.last_run.slice(0, 16)} ${t.last_status ?? ''}` : ''}`).join('\n'))
+        return 0
+      }
+      if (sub === 'run') {
+        const id = rest[1]
+        if (id === undefined) {
+          io.err('usage: wolf cron run <id>')
+          return 2
+        }
+        await brain.ensure()
+        const tasks = await brain.readCronTasks()
+        const task = tasks.find((t) => t.id === id)
+        if (task === undefined) {
+          io.err(`no such task: ${id}`)
+          return 1
+        }
+        const { ok, detail } = await runCronAction(dir, task.action, io)
+        await brain.recordCronRun(id, ok ? 'ok' : 'error', detail)
+        io.out(`task ${id} (${task.name}) ${ok ? 'ok' : 'FAILED'}: ${detail ?? ''}`)
+        return ok ? 0 : 1
+      }
+      if (sub === 'remove') {
+        const id = rest[1]
+        if (id === undefined) {
+          io.err('usage: wolf cron remove <id>')
+          return 2
+        }
+        await brain.ensure()
+        return (await brain.removeCronTask(id)) ? (io.out(`removed ${id}`), 0) : (io.err(`no such task: ${id}`), 1)
+      }
+      io.err('usage: wolf cron add|list|run|remove')
+      return 2
+    }
+    case 'register': {
+      await registerProject(dir)
+      io.out(`registered ${dir}`)
+      return 0
+    }
+    case 'unregister': {
+      return (await unregisterProject(dir)) ? (io.out(`unregistered ${dir}`), 0) : (io.err('not registered'), 1)
+    }
+    case 'update': {
+      const projects = await listProjects()
+      if (projects.length === 0) {
+        io.err('no registered projects — run `wolf register <dir>` first')
+        return 1
+      }
+      let failed = 0
+      for (const p of projects) {
+        try {
+          const backup = await backupBrain(p.dir)
+          const result = await runCronAction(p.dir, 'scan', io)
+          io.out(`✓ ${p.name} — scan ${result.detail} (backup: ${backup})`)
+        } catch (e) {
+          failed++
+          io.err(`✗ ${p.name} — ${e instanceof Error ? e.message : e}`)
+        }
+      }
+      return failed === 0 ? 0 : 1
+    }
+    case 'backups': {
+      const backups = await listBackups(dir)
+      io.out(backups.length === 0 ? 'no backups' : backups.join('\n'))
+      return 0
+    }
+    case 'restore': {
+      // `wolf restore [tag] [dir]` — tag is the first positional, dir the last.
+      const tag = rest.find((a) => !a.startsWith('-'))
+      const tagDir = rest.length > 1 ? resolveDir(rest) : process.cwd()
+      try {
+        const done = await restoreBrain(tagDir, tag)
+        io.out(done)
+        return 0
+      } catch (e) {
+        io.err(e instanceof Error ? e.message : String(e))
+        return 1
+      }
+    }
+    case 'serve': {
+      // dashboard + cron scheduler loop (used by `daemon start`).
+      await brain.ensure()
+      const token = flag(rest, 'token', randomBytes(12).toString('hex'))
+      const port = Number(flag(rest, 'port', '3310'))
+      const server = await startDashboard({ brain, token, port })
+      io.out(`dashboard: ${server.url}/?token=${token}`)
+      const runDue = async () => {
+        const tasks = await brain.readCronTasks()
+        for (const task of dueTasks(tasks, new Date())) {
+          try {
+            const { ok, detail } = await runCronAction(dir, task.action, io)
+            await brain.recordCronRun(task.id, ok ? 'ok' : 'error', detail)
+          } catch (e) {
+            await brain.recordCronRun(task.id, 'error', e instanceof Error ? e.message : String(e))
+          }
+        }
+      }
+      await runDue()
+      const tick = setInterval(() => { void runDue() }, 60_000)
+      tick.unref?.()
+      await new Promise(() => {})
+      return 0
+    }
     case 'dashboard': {
       await brain.ensure()
       const token = flag(rest, 'token', randomBytes(12).toString('hex'))
@@ -174,7 +370,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
         const port = Number(flag(restAfter, 'port', '3310'))
         const child = spawn(
           process.execPath,
-          [fileURLToPath(import.meta.url), 'dashboard', daemonDir, `--port=${port}`, `--token=${token}`],
+          [fileURLToPath(import.meta.url), 'serve', daemonDir, `--port=${port}`, `--token=${token}`],
           { detached: true, stdio: 'ignore' },
         )
         child.unref()

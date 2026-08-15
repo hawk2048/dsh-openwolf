@@ -1,6 +1,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { main } from '../bin/wolf.mjs'
+import { WolfBrain } from '../src/brain.ts'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -71,4 +72,72 @@ test('unknown command prints usage and exits 2', async () => {
   err = ''
   assert.equal(await main(['frobnicate'], io), 2)
   assert.match(err, /usage:/)
+})
+
+test('cron add/list/run/remove round-trip', async () => {
+  out = ''
+  assert.equal(await main(['cron', 'add', 'nightly', '30 2 * * *', 'scan', dir], io), 0)
+  assert.match(out, /added cron task/)
+  out = ''
+  assert.equal(await main(['cron', 'list', dir], io), 0)
+  const listed = out
+  assert.match(listed, /nightly/)
+  const id = listed.match(/task-[a-z0-9]+/)?.[0] ?? ''
+  assert.ok(id.length > 0, 'task id extracted')
+  out = ''
+  assert.equal(await main(['cron', 'run', id, dir], io), 0)
+  assert.match(out, /ok/)
+  out = ''
+  assert.equal(await main(['cron', 'list', dir], io), 0)
+  assert.match(out, /last .*ok/)
+  assert.equal(await main(['cron', 'remove', id, dir], io), 0)
+  out = ''
+  assert.equal(await main(['cron', 'list', dir], io), 0)
+  assert.match(out, /no cron tasks/)
+})
+
+test('cron add rejects invalid expressions', async () => {
+  err = ''
+  assert.equal(await main(['cron', 'add', 'bad', '99 99 * * *', 'scan', dir], io), 2)
+  assert.match(err, /invalid cron/)
+})
+
+test('bug search finds logged bugs', async () => {
+  const brain = new WolfBrain(dir, '.wolf')
+  await brain.ensure()
+  await brain.logBug('TypeError: boom', 'added guard')
+  out = ''
+  assert.equal(await main(['bug', 'search', 'boom', `--dir=${dir}`], io), 0)
+  assert.match(out, /boom/)
+})
+
+test('register/update/backups/restore round-trip with a test registry', async () => {
+  const reg = join(dir, '..', `reg-${Date.now()}.json`)
+  const oldEnv = process.env.DSH_WOLF_REGISTRY
+  process.env.DSH_WOLF_REGISTRY = reg
+  try {
+    out = ''
+    assert.equal(await main(['register', dir], io), 0)
+    out = ''
+    assert.equal(await main(['update'], io), 0)
+    assert.match(out, /scan .*files/)
+    out = ''
+    assert.equal(await main(['backups', dir], io), 0)
+    const tag = out.trim().split('\n')[0] ?? ''
+    assert.ok(tag.length > 0, 'backup tag listed')
+    out = ''
+    assert.equal(await main(['restore', tag, dir], io), 0)
+    assert.match(out, /restored from/)
+    assert.equal(await main(['unregister', dir], io), 0)
+  } finally {
+    if (oldEnv === undefined) delete process.env.DSH_WOLF_REGISTRY
+    else process.env.DSH_WOLF_REGISTRY = oldEnv
+    await rm(reg, { force: true })
+  }
+})
+
+test('init creates OPENWOLF.md protocol', async () => {
+  const protocol = await readFile(join(dir, '.wolf/OPENWOLF.md'), 'utf8')
+  assert.match(protocol, /Operating Protocol/)
+  assert.match(protocol, /wolf_bug/)
 })

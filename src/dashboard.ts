@@ -62,10 +62,13 @@ export function dashboardHtml(): string {
 <body>
 <header>
   <h1>dsh-openwolf</h1>
+  <a href="#overview" id="nav-overview">overview</a>
   <a href="#tokens" id="nav-tokens">tokens</a>
   <a href="#health" id="nav-health">context health</a>
   <a href="#anatomy" id="nav-anatomy">anatomy</a>
   <a href="#handoff" id="nav-handoff">handoff</a>
+  <a href="#activity" id="nav-activity">activity</a>
+  <a href="#cron" id="nav-cron">cron</a>
   <a href="#bugs" id="nav-bugs">bugs</a>
 </header>
 <main id="main"><section><h2>loading…</h2></section></main>
@@ -112,6 +115,39 @@ async function renderHandoff() {
   const pre = el('pre'); pre.textContent = d.statusMarkdown || '(empty)';
   main.appendChild(section('STATUS.md handoff', pre));
 }
+async function renderOverview() {
+  const d = await get('/status');
+  main.innerHTML = '';
+  main.appendChild(section('Overview', kv([
+    ['workspace', d.root || '—'], ['files', d.totalFiles], ['lines', d.totalLines],
+    ['last scan', d.lastScanned || 'never'], ['git HEAD', (d.gitHead || '—').slice(0, 12)],
+  ])));
+}
+async function renderActivity() {
+  const d = await get('/memory');
+  main.innerHTML = '';
+  const list = document.createElement('div');
+  // Parse memory.md table rows without backticks: | time | action | files | outcome | tokens |
+  for (const row of (d.markdown || '').split('\n')) {
+    const parts = row.split('|').map((s) => s.trim());
+    if (parts.length >= 6 && /^\d{4}-\d{2}-\d{2}/.test(parts[1] || '')) {
+      list.appendChild(el('div', parts[1] + '  ' + parts[2] + '  ' + parts[3] + '  (' + parts[4] + ')', 'muted'));
+    }
+  }
+  if (!list.childNodes.length) list.appendChild(el('div', '(no activity logged yet)', 'muted'));
+  main.appendChild(section('Activity timeline', list));
+}
+async function renderCron() {
+  const d = await get('/cron');
+  main.innerHTML = '';
+  const list = document.createElement('div');
+  for (const t of (d.tasks || [])) {
+    list.appendChild(el('div', '⏱ ' + t.id + ' ' + t.name + '  "' + t.expr + '" → ' + t.action + ' ' + (t.enabled ? '' : '(disabled)')));
+    if (t.last_run) list.appendChild(el('div', '   last ' + t.last_run.slice(0, 16) + ' ' + (t.last_status || ''), 'muted'));
+  }
+  if (!(d.tasks || []).length) list.appendChild(el('div', '(no cron tasks)', 'muted'));
+  main.appendChild(section('Cron tasks', list));
+}
 async function renderBugs() {
   const d = await get('/bugs');
   main.innerHTML = '';
@@ -124,7 +160,7 @@ async function renderBugs() {
 }
 async function boot() {
   const hash = location.hash;
-  const run = { '#tokens': renderTokens, '#health': renderHealth, '#anatomy': renderAnatomy, '#handoff': renderHandoff, '#bugs': renderBugs }[hash] || renderTokens;
+  const run = { '#overview': renderOverview, '#tokens': renderTokens, '#health': renderHealth, '#anatomy': renderAnatomy, '#handoff': renderHandoff, '#activity': renderActivity, '#cron': renderCron, '#bugs': renderBugs }[hash] || renderOverview;
   try { await run(); } catch (e) {
     main.innerHTML = '';
     main.appendChild(section('error', el('pre', String(e && e.message || e))));
@@ -194,6 +230,7 @@ export async function startDashboard(options: DashboardOptions): Promise<Dashboa
         const statusMarkdown = await brain.readStatus()
         const stale = await anatomyStaleReason(brain, config.openwolf.anatomy.rescanIntervalHours)
         return respond(200, {
+          root: brain.root,
           lastScanned: state.last_scanned ?? null,
           totalFiles: state.total_files ?? 0,
           totalLines: state.total_lines ?? 0,
@@ -214,6 +251,9 @@ export async function startDashboard(options: DashboardOptions): Promise<Dashboa
       }
       if (pathname === '/api/memory') {
         return respond(200, { markdown: await brain.readText(`${brain.dir}/memory.md`) })
+      }
+      if (pathname === '/api/cron') {
+        return respond(200, { tasks: await brain.readCronTasks() })
       }
       return respond(404, { error: 'not found' })
     } catch (err) {

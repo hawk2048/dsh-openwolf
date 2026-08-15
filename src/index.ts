@@ -425,7 +425,10 @@ export function apply(ctx: Context, config: Config) {
             if (entry.tokens >= config.symbolThresholdTokens && entry.symbolLines !== undefined && entry.symbolLines.length > 0) {
               const fresh = await fileIsFresh(root, entry)
               if (fresh) {
-                const top = entry.symbolLines.slice(0, 5)
+                // Biggest symbols first (OpenWolf parity: token-desc order).
+                const top = [...entry.symbolLines]
+                  .sort((a, b) => (b.tokens ?? 0) - (a.tokens ?? 0))
+                  .slice(0, 5)
                 const list = top
                   .map((s) => `${s.name} L${s.line}${s.endLine !== undefined && s.endLine !== s.line ? `-${s.endLine}` : ''}${s.tokens !== undefined ? ` ~${s.tokens} tok` : ''}`)
                   .join('; ')

@@ -39,7 +39,7 @@ test('dashboard serves the HTML page and report endpoint', async () => {
   assert.equal(html.status, 200)
   const text = await html.text()
   assert.ok(text.includes('dsh-openwolf'), 'page title')
-  assert.ok(text.includes('#anatomy'), 'deep-linkable panels')
+  assert.ok(text.includes('#anatomy') && text.includes('#activity') && text.includes('#cron') && text.includes('#overview'), 'deep-linkable panels')
 
   const report = await (await fetch(`${server.url}/api/report?token=secret123`)).json()
   assert.equal(report.totalSessions, 1)
@@ -54,6 +54,8 @@ test('dashboard status and anatomy endpoints', async () => {
   assert.ok(anat.markdown.includes('src/app.ts'), 'anatomy lists the fixture file')
   const bugs = await (await fetch(`${server.url}/api/bugs?token=secret123`)).json()
   assert.deepEqual(bugs.bugs, [])
+  const cron = await (await fetch(`${server.url}/api/cron?token=secret123`)).json()
+  assert.deepEqual(cron.tasks, [])
   assert.equal((await fetch(`${server.url}/api/nope?token=secret123`)).status, 404)
 })
 

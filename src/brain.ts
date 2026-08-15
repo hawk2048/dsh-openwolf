@@ -27,6 +27,7 @@ import { mkdir, readFile, writeFile, rename, readdir, unlink, stat, rm } from 'n
 import { join, dirname, basename } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { CodeMap } from './types.ts'
+import type { CronTask } from './cron.ts'
 
 /** Default brain configuration (independent default values). */
 export interface BrainConfig {
@@ -150,7 +151,7 @@ export class WolfBrain {
   async ensure(): Promise<void> {
     await mkdir(join(this.dir, 'hooks'), { recursive: true })
     await this.withLock(async () => {
-      for (const file of ['STATUS.md', 'cerebrum.md', 'memory.md']) {
+      for (const file of ['STATUS.md', 'cerebrum.md', 'memory.md', 'OPENWOLF.md']) {
         const p = join(this.dir, file)
         try {
           await stat(p)
@@ -162,6 +163,7 @@ export class WolfBrain {
         ['config.json', DEFAULT_CONFIG],
         ['buglog.json', { version: 1, bugs: [] }],
         ['token-ledger.json', { version: 1, lifetime: { total_sessions: 0 }, sessions: [] }],
+        ['cron-tasks.json', { version: 1, tasks: [] }],
       ] as const) {
         try {
           await stat(join(this.dir, file))
@@ -173,6 +175,26 @@ export class WolfBrain {
   }
 
   private defaultMarkdown(file: string): string {
+    if (file === 'OPENWOLF.md') {
+      return `# OpenWolf Operating Protocol (dsh-openwolf)
+
+This workspace runs a code-map second brain in \`.wolf/\`. Follow this protocol:
+
+1. **Anatomy first** — before reading a whole file, consult \`.wolf/anatomy.md\`
+   (or the injected code map): description, token estimate, symbols with line
+   ranges. Read large files with offset/limit.
+2. **Keep STATUS current** — end each phase by updating \`.wolf/STATUS.md\`
+   (the \`## 🚀 Next phase\` section is picked up by the session digest).
+3. **Log bugs** — when you find or fix a bug, record it in
+   \`.wolf/buglog.json\` via \`wolf_bug\` to prevent rediscovery.
+4. **Learn persistently** — record preferences, conventions, and mistakes in
+   \`.wolf/cerebrum.md\` via \`wolf_learn\`.
+5. **Respect the denylist** — secrets (\`.env\`, keys, \`.npmrc\`) are never
+   indexed or logged.
+6. **Refresh when stale** — if the map warns it may be stale (git HEAD moved or
+   old scan), run \`wolf_refresh\` before trusting it.
+`
+    }
     if (file === 'STATUS.md') {
       return `# STATUS\n\n## 🚀 Next phase\n\n_Describe the next phase here; the session digest picks up this section._\n\n## ✅ Done\n\n## 🧭 Notes\n`
     }
@@ -331,6 +353,47 @@ export class WolfBrain {
 
   async readLedger(): Promise<Ledger> {
     return this.readJSON<Ledger>(join(this.dir, 'token-ledger.json'), DEFAULT_LEDGER)
+  }
+
+  // ── cron tasks ────────────────────────────────────────────────────────
+
+  async readCronTasks(): Promise<CronTask[]> {
+    const doc = await this.readJSON<{ version: number; tasks: CronTask[] }>(join(this.dir, 'cron-tasks.json'), { version: 1, tasks: [] })
+    return doc.tasks
+  }
+
+  async writeCronTasks(tasks: CronTask[]): Promise<void> {
+    await this.withLock(async () => {
+      await this.writeJSON(join(this.dir, 'cron-tasks.json'), { version: 1, tasks })
+    })
+  }
+
+  /** Add or replace a task by id. */
+  async upsertCronTask(task: CronTask): Promise<void> {
+    const tasks = await this.readCronTasks()
+    const idx = tasks.findIndex((t) => t.id === task.id)
+    if (idx === -1) tasks.push(task)
+    else tasks[idx] = task
+    await this.writeCronTasks(tasks)
+  }
+
+  async removeCronTask(id: string): Promise<boolean> {
+    const tasks = await this.readCronTasks()
+    const next = tasks.filter((t) => t.id !== id)
+    if (next.length === tasks.length) return false
+    await this.writeCronTasks(next)
+    return true
+  }
+
+  /** Record a task run outcome (last_run + status), bounded history. */
+  async recordCronRun(id: string, status: 'ok' | 'error', detail?: string): Promise<void> {
+    const tasks = await this.readCronTasks()
+    const task = tasks.find((t) => t.id === id)
+    if (task === undefined) return
+    task.last_run = new Date().toISOString()
+    task.last_status = status
+    if (detail !== undefined) task.last_detail = detail.slice(0, 300)
+    await this.writeCronTasks(tasks)
   }
 
   // ── anatomy.md (human-readable index view) ────────────────────────────
