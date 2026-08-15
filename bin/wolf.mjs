@@ -8,9 +8,13 @@ import { WolfBrain } from '../lib/brain.js'
 import { scanCodebase } from '../lib/scanner.js'
 import { injectBlock } from '../lib/render.js'
 import { currentGitHead, anatomyStaleReason } from '../lib/digest.js'
-import { stat } from 'node:fs/promises'
+import { startDashboard } from '../lib/dashboard.js'
+import { stat, readFile, writeFile, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { pathToFileURL, fileURLToPath } from 'node:url'
+import { randomBytes } from 'node:crypto'
 
 /** CLI-default scan options (mirror the plugin defaults). */
 function scanOptions() {
@@ -37,7 +41,15 @@ const USAGE = `usage:
   wolf scan [dir]             rescan + pin state + render anatomy.md + inject AGENTS.md
   wolf scan --check [dir]     verify index vs filesystem (CI-friendly; exit 1 on drift)
   wolf status [dir]           brain health: config, scan state, ledger, memory/buglog
-  wolf report [dir]           token ledger summary`
+  wolf report [dir]           token ledger summary
+  wolf dashboard [dir]        local dashboard server (--port, --token)
+  wolf daemon start [dir]     dashboard as a background daemon (--port, --token)
+  wolf daemon stop [dir]      stop the daemon`
+
+function flag(rest, name, fallback) {
+  const hit = rest.find((a) => a.startsWith(`--${name}=`))
+  return hit !== undefined ? hit.slice(name.length + 3) : fallback
+}
 
 /** Run the CLI. Returns the process exit code. */
 export async function main(argv = [], io = { out: console.log, err: console.error }) {
@@ -135,6 +147,55 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
         ].join('\n'),
       )
       return 0
+    }
+    case 'dashboard': {
+      await brain.ensure()
+      const token = flag(rest, 'token', randomBytes(12).toString('hex'))
+      const port = Number(flag(rest, 'port', '3310'))
+      const server = await startDashboard({ brain, token, port })
+      io.out(`dashboard: ${server.url}/?token=${token}`)
+      await new Promise(() => {}) // server keeps the process alive
+      return 0
+    }
+    case 'daemon': {
+      const action = rest[0]
+      // daemon's layout is `daemon <start|stop> [dir]` — the dir follows the action.
+      const restAfter = rest.slice(1)
+      const daemonDir = resolveDir(restAfter)
+      const daemonBrain = new WolfBrain(daemonDir, '.wolf')
+      const pidPath = join(daemonDir, '.wolf/daemon.pid')
+      if (action === 'start') {
+        if (existsSync(pidPath)) {
+          io.err('daemon already running (see ' + pidPath + ')')
+          return 1
+        }
+        await daemonBrain.ensure()
+        const token = flag(restAfter, 'token', randomBytes(12).toString('hex'))
+        const port = Number(flag(restAfter, 'port', '3310'))
+        const child = spawn(
+          process.execPath,
+          [fileURLToPath(import.meta.url), 'dashboard', daemonDir, `--port=${port}`, `--token=${token}`],
+          { detached: true, stdio: 'ignore' },
+        )
+        child.unref()
+        await writeFile(pidPath, String(child.pid), 'utf8')
+        io.out(`daemon started (pid ${child.pid}) — dashboard: http://127.0.0.1:${port}/?token=${token}`)
+        return 0
+      }
+      if (action === 'stop') {
+        try {
+          const pid = Number((await readFile(pidPath, 'utf8')).trim())
+          process.kill(pid, 'SIGTERM')
+          await rm(pidPath, { force: true })
+          io.out(`daemon stopped (pid ${pid})`)
+          return 0
+        } catch {
+          io.err('no daemon running')
+          return 1
+        }
+      }
+      io.err('usage: wolf daemon start|stop')
+      return 2
     }
     default:
       io.err(USAGE)
