@@ -79,7 +79,37 @@ const USAGE = `usage: dshwolf <command> [args]
 
 Options:
   -h, --help                      show this help
-  -v, --version                   print version`
+  -v, --version                   print version
+
+Run \`dshwolf <command> --help\` for subcommand help (e.g. \`dshwolf cron --help\`).`
+
+/** Per-subcommand help blocks (shown for `dshwolf <group> --help` / -h / bare). */
+const HELP_CRON = `usage: dshwolf cron <add|list|run|remove>
+
+  dshwolf cron add <name> '<expr>' <scan|check> [dir]
+                          schedule a zero-token task
+                          (cron syntax: 5 fields, @daily/@hourly/..., month+weekday names)
+  dshwolf cron list [dir]    list scheduled tasks with last-run status
+  dshwolf cron run <id> [dir]   trigger one task now
+  dshwolf cron remove <id> [dir]   delete a task`
+
+const HELP_DAEMON = `usage: dshwolf daemon <start|stop> [dir]
+
+  dshwolf daemon start [dir]    run dashboard + cron scheduler as a detached daemon
+                                (--port, --token, --token-file)
+  dshwolf daemon stop [dir]     stop the daemon`
+
+const HELP_BUG = `usage: dshwolf bug search <term>
+
+  Search .wolf/buglog.json for matching entries (prevents re-debugging
+  already-fixed issues). Use --dir= for a specific workspace.`
+
+const HELP_HARNESS = `usage: dshwolf harness <status|add> [name]
+
+  dshwolf harness status           list DSH profiles and whether dsh-openwolf is wired
+  dshwolf harness add [name]       wire dsh-openwolf into a profile's package.json
+                                   (default profile: web) — then run pnpm install
+                                   in the profile and restart the harness`
 
 /** Run one cron action against a workspace. */
 async function runCronAction(dir, action, io) {
@@ -282,8 +312,12 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       return 0
     }
     case 'bug': {
+      if (rest.includes('--help') || rest.includes('-h') || rest[0] === undefined) {
+        io.out(HELP_BUG)
+        return 0
+      }
       if (rest[0] !== 'search' || rest[1] === undefined) {
-        io.err('usage: dshwolf bug search <term> [--dir=X]')
+        io.err(HELP_BUG)
         return 2
       }
       // bug search has no positional dir (free-text terms); use --dir= or cwd.
@@ -301,6 +335,10 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
     }
     case 'cron': {
       const sub = rest[0]
+      if (rest.includes('--help') || rest.includes('-h') || sub === undefined) {
+        io.out(HELP_CRON)
+        return 0
+      }
       if (sub === 'add') {
         const [name, expr, action] = rest.slice(1)
         if (name === undefined || expr === undefined || (action !== 'scan' && action !== 'check')) {
@@ -452,6 +490,10 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
     }
     case 'daemon': {
       const action = rest[0]
+      if (rest.includes('--help') || rest.includes('-h') || action === undefined) {
+        io.out(HELP_DAEMON)
+        return 0
+      }
       // daemon's layout is `daemon <start|stop> [dir]` — the dir follows the action.
       const restAfter = rest.slice(1)
       const daemonDir = resolveDir(restAfter)
@@ -498,6 +540,10 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       // DSH is the agent platform itself, so wiring = editing the profile's
       // package.json (dependencies + bundles) instead of installing hook files.
       const action = rest[0] ?? 'status'
+      if (rest.includes('--help') || rest.includes('-h')) {
+        io.out(HELP_HARNESS)
+        return 0
+      }
       // Env-overridable for tests: DSH_WOLF_PROFILES_DIR.
       const profilesDir =
         process.env.DSH_WOLF_PROFILES_DIR !== undefined

@@ -1,6 +1,6 @@
 {
     "name":  "dsh-openwolf",
-    "version":  "0.8.8",
+    "version":  "0.8.9",
     "description":  "A compact code-map \u0027second brain\u0027 for DeepSeek Harness: pre-indexed project maps, per-file digests, session digests, read/write interception, and AGENTS.md injection so the agent stops re-reading whole files.",
     "type":  "module",
     "main":  "lib/index.js",

@@ -5,6 +5,15 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.9] — 2026-08-15
+
+### Added
+
+- **Subcommand help** — `dshwolf cron|daemon|bug|harness --help` (or `-h`, or
+  just the bare group name) now prints that group's own usage block, matching
+  OpenWolf's Commander behavior. The top-level help points at it
+  (`dshwolf <command> --help`).
+
 ## [0.8.8] — 2026-08-15
 
 ### Changed
@@ -273,6 +282,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.9]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.9
 [0.8.8]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.8
 [0.8.7]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.7
 [0.8.6]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.6

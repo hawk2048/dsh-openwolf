@@ -352,7 +352,9 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 cron 用的。
 
 全局选项：`dshwolf --help`（分组帮助）与 `dshwolf --version` 随处可用；裸 `dshwolf`
-也打印帮助。旧名 `wolf` 仍可作为别名使用。
+也打印帮助。子命令组也有自己的帮助——`dshwolf cron --help`、`dshwolf daemon --help`、
+`dshwolf bug --help`、`dshwolf harness --help`（或只敲组名）。旧名 `wolf` 仍可
+作为别名使用。
 
 ## 环境要求
 

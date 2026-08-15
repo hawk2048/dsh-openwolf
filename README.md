@@ -398,8 +398,10 @@ Every command also exists as a session tool (`wolf_map`, `wolf_file`,
 itself, so the CLI is only for humans, scripts, and cron.
 
 Global flags: `dshwolf --help` (grouped usage) and `dshwolf --version` work
-anywhere; a bare `dshwolf` also prints the help. The old `wolf` name still
-works as an alias.
+anywhere; a bare `dshwolf` also prints the help. Subcommand groups have their
+own help too — `dshwolf cron --help`, `dshwolf daemon --help`,
+`dshwolf bug --help`, `dshwolf harness --help` (or just the group name). The
+old `wolf` name still works as an alias.
 
 ## Requirements
 

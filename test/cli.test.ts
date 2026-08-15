@@ -95,6 +95,32 @@ test('--version prints the package version and exits 0', async () => {
   assert.match(out, /dshwolf \d+\.\d+\.\d+ \(dsh-openwolf\)/)
 })
 
+test('subcommand help: cron/daemon/bug/harness --help and bare invocation', async () => {
+  const cases: Array<[string[], RegExp]> = [
+    [['cron', '--help'], /usage: dshwolf cron <add\|list\|run\|remove>/],
+    [['cron', '-h'], /usage: dshwolf cron/],
+    [['cron'], /usage: dshwolf cron/],
+    [['daemon', '--help'], /usage: dshwolf daemon <start\|stop>/],
+    [['daemon'], /usage: dshwolf daemon/],
+    [['bug', '--help'], /usage: dshwolf bug search/],
+    [['bug'], /usage: dshwolf bug search/],
+    [['harness', '--help'], /usage: dshwolf harness <status\|add>/],
+    [['harness', '-h'], /usage: dshwolf harness/],
+  ]
+  for (const [args, re] of cases) {
+    out = ''
+    err = ''
+    assert.equal(await main(args, io), 0, `${args.join(' ')} exits 0`)
+    assert.match(out, re, `${args.join(' ')} shows subcommand usage`)
+  }
+})
+
+test('top-level help points at subcommand help', async () => {
+  out = ''
+  assert.equal(await main(['--help'], io), 0)
+  assert.match(out, /dshwolf <command> --help/)
+})
+
 test('cron add/list/run/remove round-trip', async () => {
   out = ''
   assert.equal(await main(['cron', 'add', 'nightly', '30 2 * * *', 'scan', dir], io), 0)
