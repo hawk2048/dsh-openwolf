@@ -12,6 +12,7 @@ import { isIgnored, loadRootGitignore, compilePatterns, type IgnoreContext } fro
 import { detectLang, extractSymbolHits, firstMeaningfulLine, isBinary } from './symbols.ts'
 import { describeFile } from './description.ts'
 import { extractSymbolsLezer, lezerAvailableFor } from './lezer.ts'
+import { isSensitiveFile } from './brain.ts'
 import type { CodeMap, DirEntry, FileDigest, FileEntry, ScanOptions, SymbolLine } from './types.ts'
 
 /** POSIX-ify a relative path. */
@@ -107,6 +108,93 @@ export async function analyzeFile(filePath: string, size: number, mtimeMs: numbe
   return analyzeText(filePath, buf.toString('utf8'), mtimeMs, opts)
 }
 
+/** List workspace-relative file paths honoring ignore rules (no analysis). */
+export async function walkFiles(root: string, opts: ScanOptions): Promise<string[]> {
+  const ignore = await buildIgnoreContext(root, opts)
+  const out: string[] = []
+  const stack: Array<{ dirAbs: string; dirRel: string }> = [{ dirAbs: root, dirRel: '' }]
+  while (stack.length > 0) {
+    const { dirAbs, dirRel } = stack.pop()!
+    let entries
+    try {
+      entries = await readdir(dirAbs, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      const rel = dirRel === '' ? entry.name : `${dirRel}/${entry.name}`
+      if (isIgnored(rel, entry.isDirectory(), ignore)) continue
+      if (entry.isDirectory()) stack.push({ dirAbs: `${dirAbs}/${entry.name}`, dirRel: rel })
+      else if (entry.isFile()) {
+        if (isSensitiveFile(rel)) continue // secrets never enter the index
+        out.push(toPosix(rel))
+      }
+    }
+  }
+  return out.sort()
+}
+
+/** A map shape usable as a durable-index baseline (see WolfBrain.readAnatomyIndex). */
+export interface IndexBaseline {
+  files: FileEntry[]
+  dirs: DirEntry[]
+  totalFiles: number
+  totalLines: number
+}
+
+/**
+ * Refresh a workspace map from a durable index: reuse entries whose
+ * size+mtime still match, re-analyze only drifted files, add new files,
+ * drop deleted ones. Falls back to a full scan when the index is empty.
+ */
+export async function refreshMapFromIndex(
+  root: string,
+  index: IndexBaseline | null,
+  opts: ScanOptions,
+): Promise<{ map: CodeMap; reused: number; analyzed: number }> {
+  const started = Date.now()
+  const paths = await walkFiles(root, opts)
+  const files: FileEntry[] = []
+  let reused = 0
+  let analyzed = 0
+  const indexed = new Map((index?.files ?? []).map((f) => [f.path, f]))
+  for (const rel of paths) {
+    const abs = `${root.replace(/[\\/]+$/, '')}/${rel}`
+    let st
+    try {
+      st = await stat(abs)
+    } catch {
+      continue // vanished mid-walk
+    }
+    const prev = indexed.get(rel)
+    if (prev !== undefined && prev.size === st.size && prev.mtimeMs !== undefined && Math.abs(st.mtimeMs - prev.mtimeMs) < 1) {
+      files.push(prev) // unchanged: reuse without re-reading
+      reused++
+    } else {
+      const entry = await analyzeFile(abs, st.size, st.mtimeMs, opts)
+      entry.path = rel
+      files.push(entry)
+      analyzed++
+    }
+  }
+  const totalLines = files.reduce((s, f) => s + f.lines, 0)
+  const totalBytes = files.reduce((s, f) => s + f.size, 0)
+  const map: CodeMap = {
+    root,
+    version: started,
+    scannedAt: started,
+    files,
+    dirs: dirsFromFiles(files),
+    totalFiles: files.length,
+    totalLines,
+    totalBytes,
+    skippedFiles: 0,
+    truncated: false,
+    elapsedMs: Date.now() - started,
+  }
+  return { map, reused, analyzed }
+}
+
 /**
  * Scan a workspace root into a compact {@link CodeMap}. Ignores `.git` and
  * any path matched by the configured rules; stops early at `maxFiles`.
@@ -143,6 +231,7 @@ export async function scanCodebase(root: string, opts: ScanOptions): Promise<Cod
       if (entry.isDirectory()) {
         stack.push({ dirAbs: `${dirAbs}/${entry.name}`, dirRel: rel })
       } else if (entry.isFile()) {
+        if (isSensitiveFile(rel)) continue // secrets never enter the index
         if (scanned >= opts.maxFiles) {
           truncated = true
           skippedFiles++

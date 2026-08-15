@@ -89,6 +89,7 @@ async function runCronAction(dir, action, io) {
   })
   await brain.writeScanManifest(map.files.map((f) => ({ path: f.path, size: f.size, mtimeMs: f.mtimeMs ?? 0 })))
   await brain.syncAnatomy(map)
+  await brain.writeAnatomyIndex(map)
   return { ok: true, detail: `${map.totalFiles} files` }
 }
 
@@ -122,6 +123,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
         })
         await brain.writeScanManifest(map.files.map((f) => ({ path: f.path, size: f.size, mtimeMs: f.mtimeMs ?? 0 })))
         await brain.syncAnatomy(map)
+        await brain.writeAnatomyIndex(map)
         const injected = await injectBlock(join(dir, 'AGENTS.md'), map, 16384)
         io.out(`scanned ${map.totalFiles} files · ${map.totalLines} lines${injected.changed ? ' · AGENTS.md updated' : ''}`)
         return 0

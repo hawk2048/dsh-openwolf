@@ -111,18 +111,29 @@ export interface Buglog {
 
 /** Sensitive file names/extensions that must never enter the index or logs. */
 const SENSITIVE_EXTENSIONS = new Set([
-  '.env', '.pem', '.key', '.p12', '.pfx', '.jks', '.keystore', '.asc', '.gpg',
+  '.pem', '.key', '.p12', '.pfx', '.jks', '.keystore', '.asc', '.gpg',
   '.pwd', '.secret', '.token', '.credentials',
 ])
 const SENSITIVE_BASENAMES = new Set([
-  '.npmrc', '.netrc', '.htpasswd', '.pgpass', '.env', 'id_rsa', 'id_ed25519',
+  '.npmrc', '.netrc', '.htpasswd', '.pgpass', 'id_rsa', 'id_ed25519',
   'credentials.json', 'service-account.json', 'secrets.yaml', 'secrets.yml',
 ])
+const ENV_FILE_RE = /^\.env(\.[A-Za-z0-9_-]+)?$/
+/** Template suffixes that are safe to index (they carry no real secrets). */
+const ENV_TEMPLATE_SUFFIXES = new Set(['example', 'sample', 'template', 'dist', 'default'])
+
+function isEnvSecret(name: string): boolean {
+  if (!ENV_FILE_RE.test(name)) return false
+  const suffix = name.slice(4) // strip ".env"
+  if (suffix === '') return true
+  return !ENV_TEMPLATE_SUFFIXES.has(suffix.slice(1).toLowerCase())
+}
 
 /** True when a file basename should never be indexed or logged. */
 export function isSensitiveFile(filePath: string): boolean {
   const name = basename(filePath)
   if (SENSITIVE_BASENAMES.has(name)) return true
+  if (isEnvSecret(name)) return true
   const ext = name.includes('.') ? `.${name.split('.').pop() ?? ''}`.toLowerCase() : ''
   return SENSITIVE_EXTENSIONS.has(ext)
 }
@@ -447,6 +458,40 @@ This workspace runs a code-map second brain in \`.wolf/\`. Follow this protocol:
       await this.writeJSON(join(this.dir, 'hooks/_anatomy-hash.json'), { hash: sha256(next) })
       return { path: p, changed: true, absorbed }
     })
+  }
+
+  // ── durable anatomy index (B1) ────────────────────────────────────────
+
+  /**
+   * Persist the per-file anatomy index (`.wolf/anatomy-index.json`) so a
+   * restarted process can refresh incrementally instead of rescanning.
+   */
+  async writeAnatomyIndex(map: CodeMap): Promise<void> {
+    await this.withLock(async () => {
+      await this.writeJSON(join(this.dir, 'anatomy-index.json'), {
+        version: 1,
+        scannedAt: map.scannedAt,
+        totalFiles: map.totalFiles,
+        totalLines: map.totalLines,
+        dirs: map.dirs,
+        files: map.files.map((f) => ({
+          path: f.path, size: f.size, lines: f.lines, lang: f.lang, tokens: f.tokens,
+          mtimeMs: f.mtimeMs ?? 0, skipped: f.skipped, summary: f.summary,
+          symbols: f.symbols,
+          ...(f.symbolLines !== undefined ? { symbolLines: f.symbolLines } : {}),
+        })),
+      })
+    })
+  }
+
+  async readAnatomyIndex(): Promise<{ scannedAt: number; totalFiles: number; totalLines: number; dirs: CodeMap['dirs']; files: CodeMap['files'] } | null> {
+    const doc = await this.readJSON<{
+      version: number; scannedAt: number; totalFiles: number; totalLines: number;
+      dirs: CodeMap['dirs']; files: CodeMap['files']
+    }>(join(this.dir, 'anatomy-index.json'), {
+      version: 0, scannedAt: 0, totalFiles: 0, totalLines: 0, dirs: [], files: [],
+    })
+    return doc.version === 1 ? doc : null
   }
 
   // ── session + scan state ──────────────────────────────────────────────

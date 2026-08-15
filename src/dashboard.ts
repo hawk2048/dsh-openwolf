@@ -12,7 +12,7 @@ import { createServer, type Server } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import { WolfBrain } from './brain.ts'
-import { scanCodebase } from './scanner.ts'
+import { scanCodebase, refreshMapFromIndex } from './scanner.ts'
 import { currentGitHead, anatomyStaleReason } from './digest.ts'
 import type { CodeMap, ScanOptions } from './types.ts'
 
@@ -242,7 +242,14 @@ export async function startDashboard(options: DashboardOptions): Promise<Dashboa
         })
       }
       if (pathname === '/api/anatomy') {
-        const map: CodeMap = await scanCodebase(brain.root, scanOptions())
+        // Incremental: reuse the durable index, re-analyze only drifted files.
+        const index = await brain.readAnatomyIndex()
+        let map: CodeMap
+        if (index !== null && index.files.length > 0) {
+          map = (await refreshMapFromIndex(brain.root, index, scanOptions())).map
+        } else {
+          map = await scanCodebase(brain.root, scanOptions())
+        }
         return respond(200, { markdown: brain.renderAnatomy(map) })
       }
       if (pathname === '/api/bugs') {

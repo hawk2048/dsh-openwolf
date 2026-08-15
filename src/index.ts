@@ -27,7 +27,7 @@ import { defineTool, type PostToolDecision } from '@deepseek-ai/dsh-tools'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import Schema from '@deepseek-ai/schemastery'
 import { watch, type FSWatcher } from 'chokidar'
-import { scanCodebase, summarizeFile, analyzeFile, dirsFromFiles } from './scanner.ts'
+import { scanCodebase, summarizeFile, analyzeFile, dirsFromFiles, refreshMapFromIndex } from './scanner.ts'
 import { injectBlock, renderMap } from './render.ts'
 import { WolfBrain, isSensitiveFile } from './brain.ts'
 import { buildSessionDigestWithWarning, buildSessionDigest, currentGitHead, anatomyStaleReason } from './digest.ts'
@@ -194,6 +194,8 @@ export function apply(ctx: Context, config: Config) {
       })
       // Keep the human-readable index view in sync (additive absorb on edits).
       await brain.syncAnatomy(map)
+      // Persist the durable per-file index for incremental restarts (B1).
+      await brain.writeAnatomyIndex(map)
     }
     let injected = false
     let agentsMd: string | null = null
@@ -212,6 +214,19 @@ export function apply(ctx: Context, config: Config) {
     const existing = cache.get(root)
     if (existing !== undefined && !force) {
       return existing.map
+    }
+    if (!force) {
+      // Cold start: refresh incrementally from the durable index (B1) —
+      // re-analyzes only files that drifted since the last scan.
+      const brain = await brainOf(root)
+      if (brain !== null) {
+        const index = await brain.readAnatomyIndex()
+        if (index !== null && index.files.length > 0) {
+          const { map } = await refreshMapFromIndex(root, index, opts)
+          cache.set(root, { map, watcher: null })
+          return map
+        }
+      }
     }
     const { map } = await refresh(root)
     return map
