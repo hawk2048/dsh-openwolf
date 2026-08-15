@@ -5,6 +5,19 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.8] — 2026-08-15
+
+### Changed
+
+- **CLI renamed `wolf` → `dshwolf`** — the primary binary is now `dshwolf`
+  (distinct from the unrelated `wolf@0.1.0` package on npm that `npx wolf`
+  can accidentally pull). The old `wolf` name is kept as an alias, so
+  existing scripts keep working. Usage text, `--version` output, and all
+  CLI-facing docs (EN + zh) now show `dshwolf`. Session tools
+  (`wolf_map` / `wolf_file` / …), the `.wolf/` directory, and
+  `OPENWOLF.md` are **not** renamed — they are harness-facing names, not
+  CLI commands.
+
 ## [0.8.7] — 2026-08-15
 
 ### Added
@@ -260,6 +273,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.8]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.8
 [0.8.7]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.7
 [0.8.6]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.6
 [0.8.5]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.5

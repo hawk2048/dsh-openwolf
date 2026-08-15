@@ -96,12 +96,12 @@ confirms when it's live. (Or say the same thing in your own words — the
 agent understands intent, not exact phrasing.)
 
 **Option B — install it standalone (CLI only, no harness).** The package is
-also a plain npm package: install it anywhere and the `wolf` CLI works on its
-own (init / scan / status / report / dashboard / cron / backups):
+also a plain npm package: install it anywhere and the `dshwolf` CLI works on
+its own (init / scan / status / report / dashboard / cron / backups):
 
 ```bash
 npm install -g dsh-openwolf    # or: npm install --save-dev dsh-openwolf in a project
-wolf init . && wolf scan .     # initialize + index the current directory
+dshwolf init . && dshwolf scan .  # initialize + index the current directory
 ```
 
 > **Heads up — Option B does not wire the plugin into the harness.** The CLI
@@ -112,7 +112,7 @@ wolf init . && wolf scan .     # initialize + index the current directory
 > `dependencies` (verified: a global copy is *not* resolvable from the
 > profile's `node_modules`). To get the in-session experience (tools, session
 > digest, read/write interception), use **Option A**, the conversational
-> install, or — after a standalone install — `wolf harness add [profile]`
+> install, or — after a standalone install — `dshwolf harness add [profile]`
 > which wires the plugin into a profile for you. You can run both side by
 > side — CLI for humans and cron, plugin for sessions, one shared brain.
 > (This mirrors how OpenWolf's `openwolf init` auto-wires hooks to each
@@ -173,16 +173,16 @@ as tools inside a session):
 
 | You want to… | Command (CLI) | Tool (in session) |
 |---|---|---|
-| Rebuild the whole index from disk now | `wolf scan` | `wolf_refresh` |
-| Verify the index still matches the filesystem (CI-friendly) | `wolf scan --check` | `wolf_scan` |
-| Initialize `.wolf/` by hand (idempotent, rarely needed) | `wolf init` | `wolf_init` |
-| Write/read the session handoff doc | `wolf status` | `wolf_status` |
-| Update every registered project (with backup first) | `wolf update` | — |
-| Roll back `.wolf/` from a timestamped backup | `wolf restore` | — |
-| Schedule unattended rescans (zero token) | `wolf cron add … scan` | `wolf_schedule` |
+| Rebuild the whole index from disk now | `dshwolf scan` | `wolf_refresh` |
+| Verify the index still matches the filesystem (CI-friendly) | `dshwolf scan --check` | `wolf_scan` |
+| Initialize `.wolf/` by hand (idempotent, rarely needed) | `dshwolf init` | `wolf_init` |
+| Write/read the session handoff doc | `dshwolf status` | `wolf_status` |
+| Update every registered project (with backup first) | `dshwolf update` | — |
+| Roll back `.wolf/` from a timestamped backup | `dshwolf restore` | — |
+| Schedule unattended rescans (zero token) | `dshwolf cron add … scan` | `wolf_schedule` |
 
 > **Tip**: you rarely need any of this — the plugin's job is to make the
-> brain self-maintaining. Run `wolf scan` only when you changed many files
+> brain self-maintaining. Run `dshwolf scan` only when you changed many files
 > outside the harness (e.g. a big `git pull`) and want the map rebuilt
 > immediately.
 
@@ -266,7 +266,7 @@ usage from the harness token meter (`ctx.tokenMeter`, provider-reported) and
 upserts it into the ledger per session:
 
 ```bash
-wolf report
+dshwolf report
 ```
 
 ```
@@ -334,8 +334,8 @@ Two skills register into the harness skill catalog:
 ## Dashboard
 
 ```bash
-wolf daemon start
-wolf dashboard
+dshwolf daemon start
+dshwolf dashboard
 ```
 
 A local, token-authenticated dashboard: measured vs estimated tokens,
@@ -354,51 +354,52 @@ They are grouped by what you are trying to do:
 
 | Command | What it does | When to use it |
 |---|---|---|
-| `wolf init [dir]` | Create `.wolf/` (idempotent) | Usually unnecessary — the brain initializes itself on first use |
-| `wolf scan [dir]` | Rebuild the project index, render `anatomy.md`, inject `AGENTS.md` | After a big change outside the harness (e.g. `git pull`) when you want the map rebuilt now |
-| `wolf scan --check [dir]` | Verify the index matches the filesystem (size/mtime + git HEAD) | CI or pre-session verification; exits 1 on drift |
-| `wolf status [dir]` | Brain health: config, scan state, ledger, memory/buglog counts | "Is my brain healthy?" |
-| `wolf report [dir]` | Token ledger summary: measured vs estimated per session | Understanding where tokens went |
+| `dshwolf init [dir]` | Create `.wolf/` (idempotent) | Usually unnecessary — the brain initializes itself on first use |
+| `dshwolf scan [dir]` | Rebuild the project index, render `anatomy.md`, inject `AGENTS.md` | After a big change outside the harness (e.g. `git pull`) when you want the map rebuilt now |
+| `dshwolf scan --check [dir]` | Verify the index matches the filesystem (size/mtime + git HEAD) | CI or pre-session verification; exits 1 on drift |
+| `dshwolf status [dir]` | Brain health: config, scan state, ledger, memory/buglog counts | "Is my brain healthy?" |
+| `dshwolf report [dir]` | Token ledger summary: measured vs estimated per session | Understanding where tokens went |
 
 **Harness wiring** (Option B installs)
 
 | Command | What it does | When to use it |
 |---|---|---|
-| `wolf harness status` | List DSH profiles and whether each has `dsh-openwolf` wired | "Which of my profiles already have the plugin?" |
-| `wolf harness add [name]` | Wire the plugin into a profile's `package.json` (dependencies + bundles), default `web` | After a standalone install, to get the in-session experience too (then `pnpm install` in the profile + restart) |
+| `dshwolf harness status` | List DSH profiles and whether each has `dsh-openwolf` wired | "Which of my profiles already have the plugin?" |
+| `dshwolf harness add [name]` | Wire the plugin into a profile's `package.json` (dependencies + bundles), default `web` | After a standalone install, to get the in-session experience too (then `pnpm install` in the profile + restart) |
 
 **Memory and bugs**
 
 | Command | What it does | When to use it |
 |---|---|---|
-| `wolf bug search <term>` | Search `.wolf/buglog.json` | Before re-debugging something that may already be fixed |
-| `wolf register [dir]` | Add the workspace to the global project registry | Enables `wolf update` across all your projects |
-| `wolf unregister [dir]` | Remove it from the registry | Cleanup |
-| `wolf update` | Backup + rescan every registered workspace | Refresh all indexed projects at once |
+| `dshwolf bug search <term>` | Search `.wolf/buglog.json` | Before re-debugging something that may already be fixed |
+| `dshwolf register [dir]` | Add the workspace to the global project registry | Enables `dshwolf update` across all your projects |
+| `dshwolf unregister [dir]` | Remove it from the registry | Cleanup |
+| `dshwolf update` | Backup + rescan every registered workspace | Refresh all indexed projects at once |
 
 **Backups**
 
 | Command | What it does | When to use it |
 |---|---|---|
-| `wolf backups [dir]` | List timestamped `.wolf/` backups | See what you can roll back to |
-| `wolf restore [dir] [tag]` | Restore `.wolf/` from a backup (newest by default) | After an experiment went wrong |
+| `dshwolf backups [dir]` | List timestamped `.wolf/` backups | See what you can roll back to |
+| `dshwolf restore [dir] [tag]` | Restore `.wolf/` from a backup (newest by default) | After an experiment went wrong |
 
 **Scheduling and serving**
 
 | Command | What it does | When to use it |
 |---|---|---|
-| `wolf cron add <name> '<expr>' <scan\|check> [dir]` | Schedule a zero-token task (cron syntax, `@daily` etc.) | Unattended refreshes: e.g. nightly `scan` |
-| `wolf cron list [dir]` / `wolf cron run <id>` / `wolf cron remove <id>` | Manage scheduled tasks | Inspect or trigger tasks by hand |
-| `wolf dashboard [dir]` | Serve the web dashboard in the foreground (`--port`, `--token`, `--token-file`) | Live overview of tokens / context / anatomy |
-| `wolf daemon start [dir]` / `wolf daemon stop` | Run dashboard + cron scheduler as a background daemon | Keep the dashboard and scheduled tasks running without a terminal |
+| `dshwolf cron add <name> '<expr>' <scan\|check> [dir]` | Schedule a zero-token task (cron syntax, `@daily` etc.) | Unattended refreshes: e.g. nightly `scan` |
+| `dshwolf cron list [dir]` / `dshwolf cron run <id>` / `dshwolf cron remove <id>` | Manage scheduled tasks | Inspect or trigger tasks by hand |
+| `dshwolf dashboard [dir]` | Serve the web dashboard in the foreground (`--port`, `--token`, `--token-file`) | Live overview of tokens / context / anatomy |
+| `dshwolf daemon start [dir]` / `dshwolf daemon stop` | Run dashboard + cron scheduler as a background daemon | Keep the dashboard and scheduled tasks running without a terminal |
 
 Every command also exists as a session tool (`wolf_map`, `wolf_file`,
 `wolf_refresh`, `wolf_scan`, `wolf_init`, `wolf_status`, `wolf_learn`,
 `wolf_bug`, `wolf_report`, `wolf_schedule`) — the model can do all of this
 itself, so the CLI is only for humans, scripts, and cron.
 
-Global flags: `wolf --help` (grouped usage) and `wolf --version` work
-anywhere; a bare `wolf` also prints the help.
+Global flags: `dshwolf --help` (grouped usage) and `dshwolf --version` work
+anywhere; a bare `dshwolf` also prints the help. The old `wolf` name still
+works as an alias.
 
 ## Requirements
 

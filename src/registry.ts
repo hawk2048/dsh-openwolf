@@ -1,8 +1,9 @@
 /**
- * Global project registry for the `wolf` CLI: a machine-local JSON file that
- * lists registered workspaces, so `wolf update` can refresh every project
- * (with timestamped `.wolf` backups) and `wolf restore` can roll back.
- * Independent implementation of the reference registry/update/restore trio.
+ * Global project registry for the `dshwolf` CLI: a machine-local JSON file
+ * that lists registered workspaces, so `dshwolf update` can refresh every
+ * project (with timestamped `.wolf` backups) and `dshwolf restore` can roll
+ * back. Independent implementation of the reference registry/update/restore
+ * trio.
  *
  * @module dsh-openwolf/registry
  */

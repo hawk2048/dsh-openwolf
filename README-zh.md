@@ -82,12 +82,12 @@ agent 会执行 `dsh plugin --profile web add dsh-openwolf`、重启，然后确
 装好了。（用自己的话表达也可以——agent 理解意图，不挑措辞。）
 
 **方式 B —— 独立安装（仅 CLI，不依赖 harness）。** 本包也是普通 npm 包：
-装在任何地方，`wolf` CLI 即可独立使用（init / scan / status / report /
+装在任何地方，`dshwolf` CLI 即可独立使用（init / scan / status / report /
 dashboard / cron / backups）：
 
 ```bash
 npm install -g dsh-openwolf    # 或项目内：npm install --save-dev dsh-openwolf
-wolf init . && wolf scan .     # 初始化 + 索引当前目录
+dshwolf init . && dshwolf scan .     # 初始化 + 索引当前目录
 ```
 
 > **注意——方式 B 不会把插件接进 harness。** CLI 和 harness 插件是同一个
@@ -95,7 +95,7 @@ wolf init . && wolf scan .     # 初始化 + 索引当前目录
 > 账本）正是 harness 读取的内容。但全局 `npm install` 对 harness **不可见**——
 > harness 只解析你 profile `dependencies` 里声明的包（已实测：profile
 > `node_modules` 解析不到全局副本）。要获得会话内体验（工具、会话摘要、读/写
-> 拦截），请用**方式 A**、对话安装，或独立安装后跑 `wolf harness add [profile]`
+> 拦截），请用**方式 A**、对话安装，或独立安装后跑 `dshwolf harness add [profile]`
 > 一键把插件接进某个 profile。两者可以并存——CLI 给人和 cron 用、插件给会话
 > 用，共享同一个大脑。（这对应 OpenWolf 的 `openwolf init` 自动给各 agent
 > 接线；区别是 DSH 本身就是 agent 平台，所以"接线"= profile 里注册一行，
@@ -150,17 +150,17 @@ wolf init . && wolf scan .     # 初始化 + 索引当前目录
 
 | 你想… | 命令（CLI） | 工具（会话内） |
 |---|---|---|
-| 立刻从磁盘重建整个索引 | `wolf scan` | `wolf_refresh` |
-| 校验索引与文件系统一致（CI 友好） | `wolf scan --check` | `wolf_scan` |
-| 手动初始化 `.wolf/`（幂等，很少需要） | `wolf init` | `wolf_init` |
-| 读写会话交接文档 | `wolf status` | `wolf_status` |
-| 更新所有已注册项目（先备份） | `wolf update` | — |
-| 从时间戳备份回滚 `.wolf/` | `wolf restore` | — |
-| 定时无人值守重扫（零 token） | `wolf cron add … scan` | `wolf_schedule` |
+| 立刻从磁盘重建整个索引 | `dshwolf scan` | `wolf_refresh` |
+| 校验索引与文件系统一致（CI 友好） | `dshwolf scan --check` | `wolf_scan` |
+| 手动初始化 `.wolf/`（幂等，很少需要） | `dshwolf init` | `wolf_init` |
+| 读写会话交接文档 | `dshwolf status` | `wolf_status` |
+| 更新所有已注册项目（先备份） | `dshwolf update` | — |
+| 从时间戳备份回滚 `.wolf/` | `dshwolf restore` | — |
+| 定时无人值守重扫（零 token） | `dshwolf cron add … scan` | `wolf_schedule` |
 
 > **提示**：这些基本都不需要——插件的职责就是让大脑自我维护。只有当你
 > 在 harness 之外改了大量文件（例如一次大 `git pull`）想立刻重建地图时，
-> 才需要跑 `wolf scan`。
+> 才需要跑 `dshwolf scan`。
 
 ## 工作原理
 
@@ -231,7 +231,7 @@ agent 不会重做已完成的工作
 provider 上报）读取真实用量，按会话写入账本：
 
 ```bash
-wolf report
+dshwolf report
 ```
 
 ```
@@ -291,8 +291,8 @@ provider 上报合计）：
 ## 仪表盘
 
 ```bash
-wolf daemon start
-wolf dashboard
+dshwolf daemon start
+dshwolf dashboard
 ```
 
 本地、token 认证的仪表盘：实测 vs 估算 token、上下文健康（扫描新鲜度、钉住的
@@ -308,51 +308,51 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `wolf init [dir]` | 创建 `.wolf/`（幂等） | 通常不需要——大脑首次使用时自动初始化 |
-| `wolf scan [dir]` | 重建项目索引、渲染 `anatomy.md`、注入 `AGENTS.md` | 在 harness 之外做了大改动（如 `git pull`）想立刻重建地图 |
-| `wolf scan --check [dir]` | 校验索引与文件系统一致（size/mtime + git HEAD） | CI 或会话前校验；漂移退出码 1 |
-| `wolf status [dir]` | 大脑健康：配置、扫描状态、账本、memory/buglog 计数 | "我的大脑健康吗？" |
-| `wolf report [dir]` | token 账本摘要：各会话实测 vs 估算 | 弄清楚 token 花在哪 |
+| `dshwolf init [dir]` | 创建 `.wolf/`（幂等） | 通常不需要——大脑首次使用时自动初始化 |
+| `dshwolf scan [dir]` | 重建项目索引、渲染 `anatomy.md`、注入 `AGENTS.md` | 在 harness 之外做了大改动（如 `git pull`）想立刻重建地图 |
+| `dshwolf scan --check [dir]` | 校验索引与文件系统一致（size/mtime + git HEAD） | CI 或会话前校验；漂移退出码 1 |
+| `dshwolf status [dir]` | 大脑健康：配置、扫描状态、账本、memory/buglog 计数 | "我的大脑健康吗？" |
+| `dshwolf report [dir]` | token 账本摘要：各会话实测 vs 估算 | 弄清楚 token 花在哪 |
 
 **harness 接线**（方式 B 安装后）
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `wolf harness status` | 列出 DSH profiles，标出哪些已接 dsh-openwolf | "我哪些 profile 已经装了插件？" |
-| `wolf harness add [name]` | 把插件写进某 profile 的 `package.json`（dependencies + bundles），默认 `web` | 独立安装后想要会话内体验（然后在该 profile 跑 `pnpm install` 并重启） |
+| `dshwolf harness status` | 列出 DSH profiles，标出哪些已接 dsh-openwolf | "我哪些 profile 已经装了插件？" |
+| `dshwolf harness add [name]` | 把插件写进某 profile 的 `package.json`（dependencies + bundles），默认 `web` | 独立安装后想要会话内体验（然后在该 profile 跑 `pnpm install` 并重启） |
 
 **记忆与 bug**
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `wolf bug search <term>` | 搜索 `.wolf/buglog.json` | 重新排查可能已修复的问题之前 |
-| `wolf register [dir]` | 把工作区加进全局项目注册表 | 让 `wolf update` 覆盖你所有项目 |
-| `wolf unregister [dir]` | 从注册表移除 | 清理 |
-| `wolf update` | 备份 + 重扫所有已注册工作区 | 一次性刷新所有已索引项目 |
+| `dshwolf bug search <term>` | 搜索 `.wolf/buglog.json` | 重新排查可能已修复的问题之前 |
+| `dshwolf register [dir]` | 把工作区加进全局项目注册表 | 让 `dshwolf update` 覆盖你所有项目 |
+| `dshwolf unregister [dir]` | 从注册表移除 | 清理 |
+| `dshwolf update` | 备份 + 重扫所有已注册工作区 | 一次性刷新所有已索引项目 |
 
 **备份**
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `wolf backups [dir]` | 列出时间戳 `.wolf/` 备份 | 看有哪些可回滚 |
-| `wolf restore [dir] [tag]` | 从备份恢复 `.wolf/`（默认最新） | 实验搞砸之后 |
+| `dshwolf backups [dir]` | 列出时间戳 `.wolf/` 备份 | 看有哪些可回滚 |
+| `dshwolf restore [dir] [tag]` | 从备份恢复 `.wolf/`（默认最新） | 实验搞砸之后 |
 
 **调度与服务**
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `wolf cron add <name> '<expr>' <scan\|check> [dir]` | 定时零 token 任务（cron 语法、`@daily` 等） | 无人值守刷新：如每晚 `scan` |
-| `wolf cron list [dir]` / `wolf cron run <id>` / `wolf cron remove <id>` | 管理定时任务 | 查看或手动触发任务 |
-| `wolf dashboard [dir]` | 前台运行 Web 仪表盘（`--port` / `--token` / `--token-file`） | 实时查看 token / 上下文 / anatomy |
-| `wolf daemon start [dir]` / `wolf daemon stop` | 后台守护：仪表盘 + cron 调度 | 不占用终端地常驻仪表盘与定时任务 |
+| `dshwolf cron add <name> '<expr>' <scan\|check> [dir]` | 定时零 token 任务（cron 语法、`@daily` 等） | 无人值守刷新：如每晚 `scan` |
+| `dshwolf cron list [dir]` / `dshwolf cron run <id>` / `dshwolf cron remove <id>` | 管理定时任务 | 查看或手动触发任务 |
+| `dshwolf dashboard [dir]` | 前台运行 Web 仪表盘（`--port` / `--token` / `--token-file`） | 实时查看 token / 上下文 / anatomy |
+| `dshwolf daemon start [dir]` / `dshwolf daemon stop` | 后台守护：仪表盘 + cron 调度 | 不占用终端地常驻仪表盘与定时任务 |
 
 所有命令也以工具形式出现在会话里（`wolf_map`、`wolf_file`、`wolf_refresh`、
 `wolf_scan`、`wolf_init`、`wolf_status`、`wolf_learn`、`wolf_bug`、
 `wolf_report`、`wolf_schedule`）——模型自己能做这一切，CLI 只是给人、脚本和
 cron 用的。
 
-全局选项：`wolf --help`（分组帮助）与 `wolf --version` 随处可用；裸 `wolf`
-也打印帮助。
+全局选项：`dshwolf --help`（分组帮助）与 `dshwolf --version` 随处可用；裸 `dshwolf`
+也打印帮助。旧名 `wolf` 仍可作为别名使用。
 
 ## 环境要求
 

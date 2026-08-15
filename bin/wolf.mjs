@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * dsh-openwolf standalone CLI — `wolf init | scan | scan --check | status |
- * report [dir]`. Works without a running harness by reusing the library
- * (scanner/brain/render/digest). Importable for tests: `main(argv, io)`.
+ * dsh-openwolf standalone CLI — `dshwolf init | scan | scan --check | status |
+ * report [dir]` (aliased as `wolf` for backward compatibility). Works without
+ * a running harness by reusing the library (scanner/brain/render/digest).
+ * Importable for tests: `main(argv, io)`.
  */
 import { WolfBrain } from '../lib/brain.js'
 import { scanCodebase } from '../lib/scanner.js'
@@ -43,38 +44,38 @@ function resolveDir(argv) {
   return last !== undefined ? resolve(process.cwd(), last) : process.cwd()
 }
 
-const USAGE = `usage: wolf <command> [args]
+const USAGE = `usage: dshwolf <command> [args]
 
   Brain lifecycle
-    wolf init [dir]               initialize .wolf/ brain
-    wolf scan [dir]               rescan + pin state + render anatomy.md + inject AGENTS.md
-    wolf scan --check [dir]       verify index vs filesystem (CI-friendly; exit 1 on drift)
-    wolf status [dir]             brain health: config, scan state, ledger, memory/buglog
-    wolf report [dir]             token ledger summary
+    dshwolf init [dir]            initialize .wolf/ brain
+    dshwolf scan [dir]            rescan + pin state + render anatomy.md + inject AGENTS.md
+    dshwolf scan --check [dir]    verify index vs filesystem (CI-friendly; exit 1 on drift)
+    dshwolf status [dir]          brain health: config, scan state, ledger, memory/buglog
+    dshwolf report [dir]          token ledger summary
 
   Memory & bugs
-    wolf bug search <term>        search the buglog
+    dshwolf bug search <term>     search the buglog
 
   Scheduling & serving
-    wolf cron add <name> '<expr>' <scan|check> [dir]
-    wolf cron list [dir]          list scheduled tasks
-    wolf cron run <id> [dir]      run one task now
-    wolf cron remove <id> [dir]
-    wolf dashboard [dir]          local dashboard server (--port, --token, --token-file)
-    wolf daemon start [dir]       dashboard + cron scheduler as a background daemon
+    dshwolf cron add <name> '<expr>' <scan|check> [dir]
+    dshwolf cron list [dir]       list scheduled tasks
+    dshwolf cron run <id> [dir]   run one task now
+    dshwolf cron remove <id> [dir]
+    dshwolf dashboard [dir]       local dashboard server (--port, --token, --token-file)
+    dshwolf daemon start [dir]    dashboard + cron scheduler as a background daemon
                                   (--port, --token, --token-file)
-    wolf daemon stop [dir]        stop the daemon
+    dshwolf daemon stop [dir]     stop the daemon
 
   Registry & backups
-    wolf register [dir]           add workspace to the global registry
-    wolf unregister [dir]         remove workspace from the registry
-    wolf update                   backup + rescan every registered workspace
-    wolf backups [dir]            list timestamped .wolf backups
-    wolf restore [dir] [tag]      restore .wolf from a backup (newest by default)
+    dshwolf register [dir]        add workspace to the global registry
+    dshwolf unregister [dir]      remove workspace from the registry
+    dshwolf update                backup + rescan every registered workspace
+    dshwolf backups [dir]         list timestamped .wolf backups
+    dshwolf restore [dir] [tag]   restore .wolf from a backup (newest by default)
 
   Harness wiring (standalone installs)
-    wolf harness status           list DSH profiles and whether dsh-openwolf is wired
-    wolf harness add [name]       wire dsh-openwolf into a DSH profile (default: web)
+    dshwolf harness status        list DSH profiles and whether dsh-openwolf is wired
+    dshwolf harness add [name]    wire dsh-openwolf into a DSH profile (default: web)
 
 Options:
   -h, --help                      show this help
@@ -160,7 +161,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
   }
   if (cmd === '-v' || cmd === '--version') {
     const ownVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
-    io.out(`wolf ${ownVersion} (dsh-openwolf)`)
+    io.out(`dshwolf ${ownVersion} (dsh-openwolf)`)
     return 0
   }
 
@@ -194,7 +195,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       // --check: compare the persisted manifest against the filesystem.
       const manifest = await brain.readScanManifest()
       if (manifest.files.length === 0) {
-        io.err('no scan manifest found — run `wolf scan` first')
+        io.err('no scan manifest found — run `dshwolf scan` first')
         return 1
       }
       const drift = []
@@ -282,7 +283,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
     }
     case 'bug': {
       if (rest[0] !== 'search' || rest[1] === undefined) {
-        io.err('usage: wolf bug search <term> [--dir=X]')
+        io.err('usage: dshwolf bug search <term> [--dir=X]')
         return 2
       }
       // bug search has no positional dir (free-text terms); use --dir= or cwd.
@@ -303,7 +304,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       if (sub === 'add') {
         const [name, expr, action] = rest.slice(1)
         if (name === undefined || expr === undefined || (action !== 'scan' && action !== 'check')) {
-          io.err("usage: wolf cron add <name> '<expr>' <scan|check>")
+          io.err("usage: dshwolf cron add <name> '<expr>' <scan|check>")
           return 2
         }
         try {
@@ -334,7 +335,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       if (sub === 'run') {
         const id = rest[1]
         if (id === undefined) {
-          io.err('usage: wolf cron run <id>')
+          io.err('usage: dshwolf cron run <id>')
           return 2
         }
         await brain.ensure()
@@ -352,13 +353,13 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       if (sub === 'remove') {
         const id = rest[1]
         if (id === undefined) {
-          io.err('usage: wolf cron remove <id>')
+          io.err('usage: dshwolf cron remove <id>')
           return 2
         }
         await brain.ensure()
         return (await brain.removeCronTask(id)) ? (io.out(`removed ${id}`), 0) : (io.err(`no such task: ${id}`), 1)
       }
-      io.err('usage: wolf cron add|list|run|remove')
+      io.err('usage: dshwolf cron add|list|run|remove')
       return 2
     }
     case 'register': {
@@ -372,7 +373,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
     case 'update': {
       const projects = await listProjects()
       if (projects.length === 0) {
-        io.err('no registered projects — run `wolf register <dir>` first')
+        io.err('no registered projects — run `dshwolf register <dir>` first')
         return 1
       }
       let failed = 0
@@ -394,7 +395,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       return 0
     }
     case 'restore': {
-      // `wolf restore [tag] [dir]` — tag is the first positional, dir the last.
+      // `dshwolf restore [tag] [dir]` — tag is the first positional, dir the last.
       const tag = rest.find((a) => !a.startsWith('-'))
       const tagDir = rest.length > 1 ? resolveDir(rest) : process.cwd()
       try {
@@ -488,11 +489,11 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
           return 1
         }
       }
-      io.err('usage: wolf daemon start|stop')
+      io.err('usage: dshwolf daemon start|stop')
       return 2
     }
     case 'harness': {
-      // `wolf harness status|add [name]` — detect DSH profiles and wire the
+      // `dshwolf harness status|add [name]` — detect DSH profiles and wire the
       // plugin into one. Mirrors OpenWolf's `openwolf init` "auto-wire" step:
       // DSH is the agent platform itself, so wiring = editing the profile's
       // package.json (dependencies + bundles) instead of installing hook files.
@@ -552,7 +553,7 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
         io.out(`next: cd ${join(profilesDir, profileName)} && pnpm install, then restart the harness`)
         return 0
       }
-      io.err('usage: wolf harness status | wolf harness add [profile-name]')
+      io.err('usage: dshwolf harness status | dshwolf harness add [profile-name]')
       return 2
     }
     default:
