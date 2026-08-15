@@ -5,6 +5,18 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.4] — 2026-08-15
+
+### Changed (docs)
+
+- **Quick Start adds an external-install path** — Option B documents the
+  standalone `npm install -g dsh-openwolf` (or `--save-dev` in a project)
+  route that gives you the `wolf` CLI without a harness profile, plus a
+  "what you get after installing" table (in-session tools / automatic
+  behavior / CLI commands / dashboard) so new users can discover every
+  feature from the first page. Verified live: global install + `wolf init`
+  + `wolf scan` work standalone.
+
 ## [0.8.3] — 2026-08-15
 
 ### Changed (docs)
@@ -206,6 +218,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.4]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.4
 [0.8.3]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.3
 [0.8.2]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.2
 [0.8.1]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.1
