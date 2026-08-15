@@ -62,6 +62,9 @@ dsh-openwolf 给 harness 一个修复这一切的第二大脑——灵感来自
 
 ## 快速开始
 
+**方式 A —— 装进 harness（推荐）。** 一条命令，每个会话获得完整体验（会话摘要、
+读/写拦截、工具、技能）：
+
 ```bash
 dsh plugin --profile web add dsh-openwolf    # 装进你的 profile
 dsh web                                      # 重启（或重启 GUI）
@@ -77,14 +80,29 @@ dsh web                                      # 重启（或重启 GUI）
 agent 会替你执行 `dsh plugin` 命令并提示何时重启。Web GUI 或 `headless`
 profile 都能这么装。
 
-`wolf` CLI 在包装好后也可独立使用（见[命令](#命令)）：
+**方式 B —— 独立安装（仅 CLI，不依赖 harness）。** 本包也是普通 npm 包：
+装在任何地方，`wolf` CLI 即可独立使用（init / scan / status / report /
+dashboard / cron / backups）：
 
-```sh
-npx wolf init . && npx wolf scan .
+```bash
+npm install -g dsh-openwolf    # 或项目内：npm install --save-dev dsh-openwolf
+wolf init . && wolf scan .     # 初始化 + 索引当前目录
 ```
 
 从 git URL 或本地 checkout 安装需要额外的构建授权——见
 [从源码安装](docs/INSTALL-FROM-SOURCE.md)。
+
+**装完你能得到什么**（全部开箱即用，无需额外配置）：
+
+| 领域 | 内容 |
+|---|---|
+| 会话内工具 | `wolf_map` · `wolf_file` · `wolf_refresh` · `wolf_scan` · `wolf_init` · `wolf_status` · `wolf_learn` · `wolf_bug` · `wolf_report` · `wolf_schedule` |
+| 自动行为 | 会话开始摘要、重复读警告、符号行号提示、写动作日志、压缩幸存 |
+| CLI 命令 | init · scan · scan --check · status · report · bug search · cron · register · update · backups · restore · dashboard · daemon |
+| 仪表盘 | 实时本地面板：token、上下文健康、anatomy、活动、cron |
+
+每个命令的用途场景见[命令](#命令)；自我维护机制（什么自动初始化、什么保持
+新鲜、什么时候才需要手动命令）见[初始化与保持新鲜](#初始化与保持新鲜)。
 
 ## 它会创建什么
 

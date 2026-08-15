@@ -72,6 +72,10 @@ from the AGPL reference):
 
 ## Quick Start
 
+**Option A — install into the harness (recommended).** One command, and every
+session gets the full experience (session digest, read/write interception,
+tools, skills):
+
 ```bash
 dsh plugin --profile web add dsh-openwolf    # install into your profile
 dsh web                                      # restart (or restart the GUI)
@@ -88,16 +92,31 @@ then on, and works underneath — use the harness exactly as you always have.
 The agent runs the `dsh plugin` command for you and tells you when to restart.
 Works from the Web GUI or the `headless` profile.
 
-The `wolf` CLI also works standalone once the package is installed anywhere
-(see [Commands](#commands)):
+**Option B — install it standalone (CLI only, no harness).** The package is
+also a plain npm package: install it anywhere and the `wolf` CLI works on its
+own (init / scan / status / report / dashboard / cron / backups):
 
-```sh
-npx wolf init . && npx wolf scan .
+```bash
+npm install -g dsh-openwolf    # or: npm install --save-dev dsh-openwolf in a project
+wolf init . && wolf scan .     # initialize + index the current directory
 ```
 
 Installing from a git URL or a local checkout needs extra build
 authorization — see [Installing from Source](docs/INSTALL-FROM-SOURCE.md) for
 that path.
+
+**What you get after installing** (all of it, no extra setup):
+
+| Area | What's there |
+|---|---|
+| In-session tools | `wolf_map` · `wolf_file` · `wolf_refresh` · `wolf_scan` · `wolf_init` · `wolf_status` · `wolf_learn` · `wolf_bug` · `wolf_report` · `wolf_schedule` |
+| Automatic behavior | session-start digest, repeated-read warnings, symbol line-range hints, write action log, compaction survival |
+| CLI commands | init · scan · scan --check · status · report · bug search · cron · register · update · backups · restore · dashboard · daemon |
+| Dashboard | live local panel: tokens, context health, anatomy, activity, cron |
+
+Every command is described with a use case in [Commands](#commands), and the
+self-maintenance story (what initializes, what stays fresh, when you actually
+need a manual command) is in [Initialize and Keep It Fresh](#initialize-and-keep-it-fresh).
 
 ## What It Creates
 
