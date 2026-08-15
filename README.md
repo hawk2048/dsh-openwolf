@@ -72,9 +72,12 @@ from the AGPL reference):
 
 ## Quick Start
 
-**Option A — install into the harness (recommended).** One command, and every
-session gets the full experience (session digest, read/write interception,
-tools, skills):
+Two ways to install — pick one. Both end with the same full experience.
+
+### Way 1 — Install into the harness (recommended)
+
+**The straightforward way.** One command, and every session gets the full
+experience (session digest, read/write interception, tools, skills):
 
 ```bash
 dsh plugin --profile web add dsh-openwolf    # install into your profile
@@ -85,9 +88,8 @@ That is it. There is nothing to initialize and nothing to configure: on the
 first session the plugin scans the workspace once, keeps the map fresh from
 then on, and works underneath — use the harness exactly as you always have.
 
-**Don't want to touch a terminal? Ask the harness.** Copy this into any
-session (Web GUI or headless) — the agent installs the plugin and restarts
-for you:
+**No terminal? Ask the harness.** Copy this into any session (Web GUI or
+headless) — the agent installs the plugin and restarts for you:
 
 > Install the dsh-openwolf plugin into my current profile, then restart the harness so it takes effect.
 
@@ -95,26 +97,36 @@ The agent runs `dsh plugin --profile web add dsh-openwolf`, restarts, and
 confirms when it's live. (Or say the same thing in your own words — the
 agent understands intent, not exact phrasing.)
 
-**Option B — install it standalone (CLI only, no harness).** The package is
-also a plain npm package: install it anywhere and the `dshwolf` CLI works on
-its own (init / scan / status / report / dashboard / cron / backups):
+### Way 2 — Install the CLI standalone, then wire it into the harness
+
+The package is also a plain npm package: install it anywhere and the
+`dshwolf` CLI works on its own (init / scan / status / report / dashboard /
+cron / backups):
 
 ```bash
 npm install -g dsh-openwolf    # or: npm install --save-dev dsh-openwolf in a project
 dshwolf init . && dshwolf scan .  # initialize + index the current directory
 ```
 
-> **Heads up — Option B does not wire the plugin into the harness.** The CLI
-> and the harness plugin are two frontends over the **same** `.wolf/` brain:
-> what the CLI initializes (map, STATUS, memory, buglog, ledger) is exactly
-> what the harness reads. But a global `npm install` is invisible to the
-> harness — it only resolves packages declared in your profile's
-> `dependencies` (verified: a global copy is *not* resolvable from the
-> profile's `node_modules`). To get the in-session experience (tools, session
-> digest, read/write interception), use **Option A**, the conversational
-> install, or — after a standalone install — `dshwolf harness add [profile]`
-> which wires the plugin into a profile for you. You can run both side by
-> side — CLI for humans and cron, plugin for sessions, one shared brain.
+**To also enable it inside the harness** (so sessions get the tools, session
+digest, and read/write interception — not just the CLI), wire the installed
+package into a profile:
+
+```bash
+dshwolf harness status         # see which profiles have it wired
+dshwolf harness add web        # wire it into the 'web' profile (default)
+cd ~/.dsh/profiles/web && pnpm install   # install the dependency
+dsh web                        # restart the harness (or restart the GUI)
+```
+
+> **Why this step exists.** The CLI and the harness plugin are two frontends
+> over the **same** `.wolf/` brain — what the CLI initializes (map, STATUS,
+> memory, buglog, ledger) is exactly what the harness reads. But a global
+> `npm install` is invisible to the harness: it only resolves packages
+> declared in your profile's `dependencies` (verified: a global copy is *not*
+> resolvable from the profile's `node_modules`). `dshwolf harness add`
+> registers the dependency + bundle row for you, so both frontends work side
+> by side — CLI for humans and cron, plugin for sessions, one shared brain.
 > (This mirrors how OpenWolf's `openwolf init` auto-wires hooks to each
 > agent; DSH *is* the agent platform, so "wiring" is a one-line profile
 > registration instead of installing hook files.)
@@ -360,7 +372,7 @@ They are grouped by what you are trying to do:
 | `dshwolf status [dir]` | Brain health: config, scan state, ledger, memory/buglog counts | "Is my brain healthy?" |
 | `dshwolf report [dir]` | Token ledger summary: measured vs estimated per session | Understanding where tokens went |
 
-**Harness wiring** (Option B installs)
+**Harness wiring** (after a Way 2 standalone install)
 
 | Command | What it does | When to use it |
 |---|---|---|

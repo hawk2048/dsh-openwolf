@@ -5,6 +5,19 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.8.10] — 2026-08-15
+
+### Changed (docs)
+
+- **Quick Start reorganized as Way 1 / Way 2** — Way 1 (install into the
+  harness, with the conversational alternative) and Way 2 (standalone CLI
+  install) are now numbered and parallel in EN + zh. Way 2 now documents the
+  complete "enable it in the harness" flow step by step: `dshwolf harness
+  status` → `dshwolf harness add web` → `pnpm install` in the profile →
+  restart, with the verified explanation of why the wiring step exists.
+  Verified live against a scratch profile: `harness add` writes the
+  dependency + bundle row exactly as documented.
+
 ## [0.8.9] — 2026-08-15
 
 ### Added
@@ -282,6 +295,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.8.10]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.10
 [0.8.9]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.9
 [0.8.8]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.8
 [0.8.7]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.7

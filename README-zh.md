@@ -62,8 +62,12 @@ dsh-openwolf 给 harness 一个修复这一切的第二大脑——灵感来自
 
 ## 快速开始
 
-**方式 A —— 装进 harness（推荐）。** 一条命令，每个会话获得完整体验（会话摘要、
-读/写拦截、工具、技能）：
+两种安装方式，二选一——最终都能获得完整体验。
+
+### 方式 1 —— 装进 harness（推荐）
+
+**最直接的方式。** 一条命令，每个会话获得完整体验（会话摘要、读/写拦截、
+工具、技能）：
 
 ```bash
 dsh plugin --profile web add dsh-openwolf    # 装进你的 profile
@@ -81,25 +85,34 @@ headless 都行），agent 会替你安装并重启：
 agent 会执行 `dsh plugin --profile web add dsh-openwolf`、重启，然后确认
 装好了。（用自己的话表达也可以——agent 理解意图，不挑措辞。）
 
-**方式 B —— 独立安装（仅 CLI，不依赖 harness）。** 本包也是普通 npm 包：
-装在任何地方，`dshwolf` CLI 即可独立使用（init / scan / status / report /
-dashboard / cron / backups）：
+### 方式 2 —— 独立安装 CLI，再接进 harness
+
+本包也是普通 npm 包：装在任何地方，`dshwolf` CLI 即可独立使用（init /
+scan / status / report / dashboard / cron / backups）：
 
 ```bash
 npm install -g dsh-openwolf    # 或项目内：npm install --save-dev dsh-openwolf
 dshwolf init . && dshwolf scan .     # 初始化 + 索引当前目录
 ```
 
-> **注意——方式 B 不会把插件接进 harness。** CLI 和 harness 插件是同一个
-> `.wolf/` 大脑的两个前端：CLI 初始化的内容（地图、STATUS、memory、buglog、
-> 账本）正是 harness 读取的内容。但全局 `npm install` 对 harness **不可见**——
-> harness 只解析你 profile `dependencies` 里声明的包（已实测：profile
-> `node_modules` 解析不到全局副本）。要获得会话内体验（工具、会话摘要、读/写
-> 拦截），请用**方式 A**、对话安装，或独立安装后跑 `dshwolf harness add [profile]`
-> 一键把插件接进某个 profile。两者可以并存——CLI 给人和 cron 用、插件给会话
-> 用，共享同一个大脑。（这对应 OpenWolf 的 `openwolf init` 自动给各 agent
-> 接线；区别是 DSH 本身就是 agent 平台，所以"接线"= profile 里注册一行，
-> 而不是安装 hook 文件。）
+**要在 harness 里也使能**（会话获得工具、会话摘要、读/写拦截——而不只是
+CLI），把已装的包接进某个 profile：
+
+```bash
+dshwolf harness status         # 看看哪些 profile 已接线
+dshwolf harness add web        # 接进 'web' profile（默认）
+cd ~/.dsh/profiles/web && pnpm install   # 安装依赖
+dsh web                        # 重启 harness（或重启 GUI）
+```
+
+> **为什么需要这一步。** CLI 和 harness 插件是同一个 `.wolf/` 大脑的两个
+> 前端——CLI 初始化的内容（地图、STATUS、memory、buglog、账本）正是 harness
+> 读取的内容。但全局 `npm install` 对 harness **不可见**：harness 只解析你
+> profile `dependencies` 里声明的包（已实测：profile `node_modules` 解析不到
+> 全局副本）。`dshwolf harness add` 替你注册依赖 + bundle 行，让两个前端并存
+> ——CLI 给人和 cron 用、插件给会话用，共享同一个大脑。（这对应 OpenWolf 的
+> `openwolf init` 自动给各 agent 接线；区别是 DSH 本身就是 agent 平台，所以
+> "接线"= profile 里注册一行，而不是安装 hook 文件。）
 
 从 git URL 或本地 checkout 安装需要额外的构建授权——见
 [从源码安装](docs/INSTALL-FROM-SOURCE.md)。
@@ -314,7 +327,7 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 | `dshwolf status [dir]` | 大脑健康：配置、扫描状态、账本、memory/buglog 计数 | "我的大脑健康吗？" |
 | `dshwolf report [dir]` | token 账本摘要：各会话实测 vs 估算 | 弄清楚 token 花在哪 |
 
-**harness 接线**（方式 B 安装后）
+**harness 接线**（方式 2 独立安装后）
 
 | 命令 | 作用 | 什么时候用 |
 |---|---|---|
