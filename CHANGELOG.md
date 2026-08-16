@@ -5,6 +5,20 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.9.1] — 2026-08-15
+
+### Changed (docs/packaging)
+
+- **README language split** — `README.md` is now the **Chinese** readme (the
+  GitHub repo default), and the English readme lives in `README-en.md`. The
+  npm page shows English: a `prepublishOnly` script
+  (`scripts/inject-npm-readme.mjs`) injects `README-en.md` into
+  `package.json.readme` before publish and `postpublish` restores the
+  pristine file (verified: the packed tarball carries
+  `readmeFilename: README-en.md` with English content). Language-switch
+  links updated in both files; `.dshwolf/` and the publish backup added to
+  `.gitignore`.
+
 ## [0.9.0] — 2026-08-15
 
 ### Changed (breaking-ish)
@@ -357,6 +371,7 @@ Initial release.
   agent's session `cwd`; cache per workspace root.
 - Bilingual README (EN + zh).
 
+[0.9.1]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.9.1
 [0.9.0]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.9.0
 [0.8.13]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.13
 [0.8.12]: https://github.com/hawk2048/dsh-openwolf/releases/tag/v0.8.12

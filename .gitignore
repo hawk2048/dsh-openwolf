@@ -4,3 +4,5 @@ lib/
 .DS_Store
 .tmp/
 coverage/
+.dshwolf/
+.package.json.readme.bak

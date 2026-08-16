@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  <strong>The second brain for DeepSeek Harness.</strong>
+  <strong>DeepSeek Harness 的第二大脑。</strong>
 </p>
 
 <p align="center">
-  Improved context management, a pre-indexed project map, and smarter token utilization,<br />
-  delivered through invisible harness hooks. Zero workflow changes.
+  更好的上下文管理、预索引项目地图、更聪明的 token 利用，<br />
+  通过 harness 隐形钩子交付。工作流零改动。
 </p>
 
 <p align="center">
@@ -20,262 +20,231 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start"><b>Quick Start</b></a> &nbsp;&middot;&nbsp;
-  <a href="#what-it-creates"><b>What It Creates</b></a> &nbsp;&middot;&nbsp;
-  <a href="#initialize-and-keep-it-fresh"><b>Initialize</b></a> &nbsp;&middot;&nbsp;
-  <a href="#how-it-works"><b>How It Works</b></a> &nbsp;&middot;&nbsp;
-  <a href="#token-intelligence"><b>Token Intelligence</b></a> &nbsp;&middot;&nbsp;
-  <a href="#dashboard"><b>Dashboard</b></a> &nbsp;&middot;&nbsp;
-  <a href="#commands"><b>Commands</b></a> &nbsp;&middot;&nbsp;
-  <a href="CHANGELOG.md"><b>Changelog</b></a>
+  <a href="#快速开始"><b>快速开始</b></a> &nbsp;&middot;&nbsp;
+  <a href="#它会创建什么"><b>它会创建什么</b></a> &nbsp;&middot;&nbsp;
+  <a href="#初始化与保持新鲜"><b>初始化</b></a> &nbsp;&middot;&nbsp;
+  <a href="#工作原理"><b>工作原理</b></a> &nbsp;&middot;&nbsp;
+  <a href="#token-智能"><b>Token 智能</b></a> &nbsp;&middot;&nbsp;
+  <a href="#仪表盘"><b>仪表盘</b></a> &nbsp;&middot;&nbsp;
+  <a href="#命令"><b>命令</b></a> &nbsp;&middot;&nbsp;
+  <a href="CHANGELOG.md"><b>变更日志</b></a>
 </p>
 
-English | [中文](README-zh.md)
+[English](README-en.md) | 中文
 
 ---
 
-| Without dsh-openwolf | With dsh-openwolf |
+| 不用 dsh-openwolf | 用 dsh-openwolf |
 |---|---|
-| The agent rereads a file it already saw (~2,000 tokens) | It reads the one-line description first, or skips the read entirely |
-| Whole-file reads just to find one function | Symbol-level hints give exact line ranges for `offset`/`limit` reads |
-| Context compaction wipes what the session did | A PreCompact snapshot and restore keep the work in context |
-| Every session starts from a cold prompt | A budget-capped session digest preloads goals, known mistakes, recent fixes, and the project map |
-| No idea where your tokens went | Usage measured from the harness token meter, plus a live local dashboard |
+| 模型反复整文件重读（每次 ~2,000 tokens） | 先读一行摘要，或干脆跳过读取 |
+| 为找一个函数整文件读取 | 符号级提示给出精确行号，`offset`/`limit` 定向读 |
+| 上下文压缩抹掉已做的工作 | PreCompact 快照 + 恢复摘要，工作留在上下文里 |
+| 每个会话从冷提示开始 | 预算封顶的会话摘要预载目标、已知错误、最近修复与项目地图 |
+| 不知道 token 花在哪 | harness token meter 实测 + 实时本地仪表盘 |
 
 ---
 
-## Why dsh-openwolf?
+## 为什么用 dsh-openwolf？
 
-Coding agents are powerful but they work blind. An agent does not know what a
-file contains until it opens it. It cannot tell a 50-token config from a
-2,000-token module. It rereads the same file in one session without noticing,
-forgets your corrections between sessions, and loses everything when its
-context window compacts.
+编码 agent 很强大，但它们是"盲"的。在打开文件之前，agent 不知道文件里有什么；它分不清 50-token 的配置和 2,000-token 的模块；同一会话里重读同一文件而不自知；跨会话忘记你的纠正；上下文窗口压缩时丢失一切。
 
-dsh-openwolf gives the harness a second brain that fixes all of that —
-inspired by [OpenWolf](https://github.com/cytostack/openwolf) for Claude Code,
-implemented from scratch as a **native DeepSeek Harness plugin** (MIT, no code
-from the AGPL reference):
+dsh-openwolf 给 harness 一个修复这一切的第二大脑——灵感来自
+[Claude Code 版 OpenWolf](https://github.com/cytostack/openwolf)，作为
+**DeepSeek Harness 原生插件**从零实现（MIT，不含 AGPL 参考项目的任何代码）：
 
-- **Context management.** A budget-capped digest of your project's most
-  valuable state (current goals, known mistakes, fixed bugs, the project map)
-  is injected at every session start. A compaction snapshot plus a
-  compaction-aware restore mean context compaction no longer erases what the
-  session already did.
-- **Architecture scaffolding.** A durable, self-healing project index maps
-  every file with a description, a token estimate, and (for large files) its
-  functions and classes with exact line ranges. Agents navigate your codebase
-  instead of rediscovering it.
-- **Token utilization.** Repeated reads are caught, whole-file reads become
-  targeted slice reads, and real usage is measured from the harness token
-  meter so you can verify the savings instead of trusting an estimate.
+- **上下文管理。** 每个会话开始注入一份预算封顶的摘要（当前目标、已知错误、
+  已修复 bug、项目地图）。压缩快照 + 压缩感知恢复意味着上下文压缩不再抹掉
+  会话已完成的工作。
+- **架构脚手架。** 一份持久、自愈的项目索引为每个文件标注描述、token 估算，
+  大文件还索引函数与类及其精确行号。agent 导航你的代码库，而不是重新发现它。
+- **Token 利用。** 重复读被拦下，整文件读变成定向切片读，真实用量从 harness
+  token meter 实测——你可以验证节省，而不是相信估算。
 
-## Quick Start
+## 快速开始
 
-Two ways to install — pick one. Both end with the same full experience.
+两种安装方式，二选一——最终都能获得完整体验。
 
-### Way 1 — Install into the harness (recommended)
+### 方式 1 —— 装进 harness（推荐）
 
-**The straightforward way.** One command, and every session gets the full
-experience (session digest, read/write interception, tools, skills):
+**最直接的方式。** 一条命令，每个会话获得完整体验（会话摘要、读/写拦截、
+工具、技能）：
 
 ```bash
-dsh plugin --profile web add dsh-openwolf    # install into your profile
-dsh web                                      # restart (or restart the GUI)
+dsh plugin --profile web add dsh-openwolf    # 装进你的 profile
+dsh web                                      # 重启（或重启 GUI）
 ```
 
-That is it. There is nothing to initialize and nothing to configure: on the
-first session the plugin scans the workspace once, keeps the map fresh from
-then on, and works underneath — use the harness exactly as you always have.
+就这么简单。**无需初始化、无需配置**：第一个会话里插件扫描一次工作区，此后
+保持地图新鲜，在底层默默工作——harness 照常用，没有任何流程改动。
 
-**No terminal? Ask the harness.** Copy this into any session (Web GUI or
-headless) — the agent installs the plugin and restarts for you:
+**不想敲命令？让 agent 帮你装。** 把下面这句复制进任意会话（Web GUI 或
+headless 都行），agent 会替你安装并重启：
 
-> Install the dsh-openwolf plugin into my current profile, then restart the harness so it takes effect.
+> 帮我把 dsh-openwolf 装进当前 profile，然后重启让它生效。
 
-The agent runs `dsh plugin --profile web add dsh-openwolf`, restarts, and
-confirms when it's live. (Or say the same thing in your own words — the
-agent understands intent, not exact phrasing.)
+agent 会执行 `dsh plugin --profile web add dsh-openwolf`、重启，然后确认
+装好了。（用自己的话表达也可以——agent 理解意图，不挑措辞。）
 
-### Way 2 — Install the CLI standalone, then wire it into the harness
+### 方式 2 —— 独立安装 CLI，再接进 harness
 
-The package is also a plain npm package: install it anywhere and the
-`dshwolf` CLI works on its own (init / scan / status / report / dashboard /
-cron / backups):
+本包也是普通 npm 包：装在任何地方，`dshwolf` CLI 即可独立使用（init /
+scan / status / report / dashboard / cron / backups）：
 
 ```bash
-npm install -g dsh-openwolf    # or: npm install --save-dev dsh-openwolf in a project
-dshwolf init . && dshwolf scan .  # initialize + index the current directory
+npm install -g dsh-openwolf    # 或项目内：npm install --save-dev dsh-openwolf
+dshwolf init . && dshwolf scan .     # 初始化 + 索引当前目录
 ```
 
-**To also enable it inside the harness** (so sessions get the tools, session
-digest, and read/write interception — not just the CLI), wire the installed
-package into a profile — one command does the wiring *and* installs the
-dependency:
+**要在 harness 里也使能**（会话获得工具、会话摘要、读/写拦截——而不只是
+CLI），把已装的包接进某个 profile——**一条命令同时完成初始化 + 接线 +
+安装依赖**：
 
 ```bash
-dshwolf init . --agent deepseek-harness   # initialize + wire the default profile (web)
-dsh web                                   # restart the harness (or restart the GUI)
+dshwolf init . --agent deepseek-harness   # 初始化 + 接进默认 profile（web）
+dsh web                                   # 重启 harness（或重启 GUI）
 ```
 
-Or pick a specific profile / all profiles, OpenWolf-style:
+也可以指定某个 profile 或全部，OpenWolf 风格：
 
 ```bash
-dshwolf init . --agent headless           # wire the 'headless' profile
-dshwolf init . --agent all                # wire every profile
-dshwolf harness status                    # see which profiles have it wired
-dshwolf harness add web                   # wire + install into one profile explicitly
+dshwolf init . --agent headless           # 接进 'headless' profile
+dshwolf init . --agent all                # 接进所有 profile
+dshwolf harness status                    # 看看哪些 profile 已接线
+dshwolf harness add web                   # 显式接线 + 安装到某个 profile
 ```
 
-> **Why this step exists.** The CLI and the harness plugin are two frontends
-> over the **same** `.dshwolf/` brain — what the CLI initializes (map, STATUS,
-> memory, buglog, ledger) is exactly what the harness reads. But a global
-> `npm install` is invisible to the harness: it only resolves packages
-> declared in your profile's `dependencies` (verified: a global copy is *not*
-> resolvable from the profile's `node_modules`). `dshwolf init --agent` (and
-> `harness add`) register the dependency + bundle row **and run `pnpm install`
-> for you** — mirroring `openwolf init --agent claude` doing the whole setup
-> in one shot (`--no-install` edits only, e.g. in CI). Both frontends then
-> work side by side — CLI for humans and cron, plugin for sessions, one
-> shared brain. DSH *is* the agent platform, so "wiring" is a one-line
-> profile registration instead of OpenWolf's hook-file installation.
+> **为什么需要这一步。** CLI 和 harness 插件是同一个 `.dshwolf/` 大脑的两个
+> 前端——CLI 初始化的内容（地图、STATUS、memory、buglog、账本）正是 harness
+> 读取的内容。但全局 `npm install` 对 harness **不可见**：harness 只解析你
+> profile `dependencies` 里声明的包（已实测：profile `node_modules` 解析不到
+> 全局副本）。`dshwolf init --agent`（与 `harness add`）替你注册依赖 + bundle
+> 行**并自动运行 `pnpm install`**——对应 OpenWolf `openwolf init --agent
+> claude` 的一步到位（只想改 package.json 时用 `--no-install`，如 CI）。两个
+> 前端并存——CLI 给人和 cron 用、插件给会话用，共享同一个大脑。DSH 本身就是
+> agent 平台，所以"接线"= profile 里注册一行，而不是 OpenWolf 的 hook 文件
+> 安装。
 
-Installing from a git URL or a local checkout needs extra build
-authorization — see [Installing from Source](docs/INSTALL-FROM-SOURCE.md) for
-that path.
+从 git URL 或本地 checkout 安装需要额外的构建授权——见
+[从源码安装](docs/INSTALL-FROM-SOURCE.md)。
 
-**What you get after installing** (all of it, no extra setup):
+**装完你能得到什么**（全部开箱即用，无需额外配置）：
 
-| Area | What's there |
+| 领域 | 内容 |
 |---|---|
-| In-session tools | `wolf_map` · `wolf_file` · `wolf_refresh` · `wolf_scan` · `wolf_init` · `wolf_status` · `wolf_learn` · `wolf_bug` · `wolf_report` · `wolf_schedule` |
-| Automatic behavior | session-start digest, repeated-read warnings, symbol line-range hints, write action log, compaction survival |
-| CLI commands | init · scan · scan --check · status · report · bug search · cron · register · update · backups · restore · dashboard · daemon |
-| Dashboard | live local panel: tokens, context health, anatomy, activity, cron |
+| 会话内工具 | `wolf_map` · `wolf_file` · `wolf_refresh` · `wolf_scan` · `wolf_init` · `wolf_status` · `wolf_learn` · `wolf_bug` · `wolf_report` · `wolf_schedule` |
+| 自动行为 | 会话开始摘要、重复读警告、符号行号提示、写动作日志、压缩幸存 |
+| CLI 命令 | init · scan · scan --check · status · report · bug search · cron · register · update · backups · restore · dashboard · daemon |
+| 仪表盘 | 实时本地面板：token、上下文健康、anatomy、活动、cron |
 
-Every command is described with a use case in [Commands](#commands), and the
-self-maintenance story (what initializes, what stays fresh, when you actually
-need a manual command) is in [Initialize and Keep It Fresh](#initialize-and-keep-it-fresh).
+每个命令的用途场景见[命令](#命令)；自我维护机制（什么自动初始化、什么保持
+新鲜、什么时候才需要手动命令）见[初始化与保持新鲜](#初始化与保持新鲜)。
 
-## What It Creates
+## 它会创建什么
 
-The first scan creates a `.dshwolf/` directory in your workspace:
+首次扫描会在工作区创建 `.dshwolf/` 目录：
 
-| File | Purpose |
-|------|---------|
-| `anatomy-index.json` | Durable project index: descriptions, token estimates, content hashes, symbols |
-| `anatomy.md` | Human-readable render of the index, kept in sync automatically |
-| `cerebrum.md` | Learned preferences, corrections, Do-Not-Repeat list |
-| `memory.md` | Chronological action log with token estimates |
-| `STATUS.md` | Session handoff: resume any session in one small read |
-| `buglog.json` | Bug fix memory, searchable, prevents rediscovery |
-| `token-ledger.json` | Measured token usage, per session and per agent |
-| `hooks/` | Session state, scan state (git HEAD pin), precompact snapshots |
-| `config.json` | Configuration, including the session-digest budget |
-| `OPENWOLF.md` | The operating protocol your agents follow |
+| 文件 | 用途 |
+|------|------|
+| `anatomy-index.json` | 持久项目索引：描述、token 估算、内容哈希、符号 |
+| `anatomy.md` | 索引的人类可读渲染，自动保持同步 |
+| `cerebrum.md` | 学习到的偏好、纠正、Do-Not-Repeat 列表 |
+| `memory.md` | 时序动作日志（含 token 估算） |
+| `STATUS.md` | 会话交接：一次小读取即可恢复任何会话 |
+| `buglog.json` | bug 修复记忆，可搜索，防止重新排查 |
+| `token-ledger.json` | 实测 token 用量，按会话与 agent 统计 |
+| `hooks/` | 会话状态、扫描状态（git HEAD 钉住）、压缩前快照 |
+| `config.json` | 配置，包括会话摘要预算 |
+| `OPENWOLF.md` | agent 遵循的操作协议 |
 
-> **Why `.dshwolf/` and not `.wolf/`?** The original
-> [OpenWolf](https://github.com/cytostack/openwolf) (for Claude Code / Codex /
-> OpenCode / Gemini / Cursor) also uses a `.wolf/` brain. Keeping ours in a
-> separate `.dshwolf/` directory means both tools can manage the **same
-> workspace** without overwriting each other's config, ledger, or memory —
-> and a future OpenWolf update can never force a change here. Migrating from
-> this plugin's old `.wolf/` location (pre-0.9): `mv .wolf .dshwolf`.
-> (The file *formats* follow the OpenWolf behavioral spec — cerebrum,
-> STATUS, buglog, memory — so a project can adopt either or both brains.)
+> **为什么用 `.dshwolf/` 而不是 `.wolf/`？** 原版
+> [OpenWolf](https://github.com/cytostack/openwolf)（面向 Claude Code /
+> Codex / OpenCode / Gemini / Cursor）也使用 `.wolf/` 大脑。我们把大脑放在
+> 独立的 `.dshwolf/` 目录，意味着两个工具可以管理**同一个工作区**而互不覆盖
+> 彼此的配置、账本或记忆——未来的 OpenWolf 更新也永远不会逼着这里跟着改。
+> 从本插件旧位置（0.9 之前）迁移：`mv .wolf .dshwolf`。（文件*格式*遵循
+> OpenWolf 行为规范——cerebrum、STATUS、buglog、memory——所以一个项目可以
+> 选择其中任一大脑或两者并用。）
 
-## Initialize and Keep It Fresh
+## 初始化与保持新鲜
 
-**Nothing needs manual setup** — the plugin initializes the brain lazily on
-its first use in a workspace and rescans automatically:
+**无需任何手动初始化**——插件在工作区的首次使用时惰性初始化大脑，之后自动
+重扫：
 
-- **First contact**: the first `wolf_*` tool call (or the first session with
-  `injectAgentsMd`) creates `.dshwolf/`, scans the workspace once, and injects
-  the map into `AGENTS.md`. No `init` step required.
-- **Auto-refresh**: a debounced watcher rescans on file changes; `write`/`edit`
-  results re-analyze the single changed file immediately, so the map and
-  `anatomy.md` stay fresh while you work.
-- **Session-start digest**: every new session gets a budget-capped digest
-  (STATUS 🚀 / Do-Not-Repeat / recent bugs / anatomy pointer) plus a
-  staleness warning when the scan is old or the git HEAD moved.
+- **首次接触**：第一次调用 `wolf_*` 工具（或第一个带 `injectAgentsMd` 的
+  会话）即创建 `.dshwolf/`、扫描一次工作区、把地图注入 `AGENTS.md`。不需要
+  单独执行 init。
+- **自动刷新**：防抖 watcher 在文件变更时重扫；`write`/`edit` 结果立即
+  重分析被改文件，地图和 `anatomy.md` 随你的工作保持新鲜。
+- **会话开始摘要**：每个新会话注入预算封顶的摘要（STATUS 🚀 / Do-Not-Repeat /
+  最近 bugs / anatomy 指针），扫描过旧或 git HEAD 移动时给出陈旧警告。
 
-When you do want explicit control, everything is one command (also available
-as tools inside a session):
+想要显式控制时，一切都是一条命令（会话内也有对应工具）：
 
-| You want to… | Command (CLI) | Tool (in session) |
+| 你想… | 命令（CLI） | 工具（会话内） |
 |---|---|---|
-| Rebuild the whole index from disk now | `dshwolf scan` | `wolf_refresh` |
-| Verify the index still matches the filesystem (CI-friendly) | `dshwolf scan --check` | `wolf_scan` |
-| Initialize `.dshwolf/` by hand (idempotent, rarely needed) | `dshwolf init` | `wolf_init` |
-| Write/read the session handoff doc | `dshwolf status` | `wolf_status` |
-| Update every registered project (with backup first) | `dshwolf update` | — |
-| Roll back `.dshwolf/` from a timestamped backup | `dshwolf restore` | — |
-| Schedule unattended rescans (zero token) | `dshwolf cron add … scan` | `wolf_schedule` |
+| 立刻从磁盘重建整个索引 | `dshwolf scan` | `wolf_refresh` |
+| 校验索引与文件系统一致（CI 友好） | `dshwolf scan --check` | `wolf_scan` |
+| 手动初始化 `.dshwolf/`（幂等，很少需要） | `dshwolf init` | `wolf_init` |
+| 读写会话交接文档 | `dshwolf status` | `wolf_status` |
+| 更新所有已注册项目（先备份） | `dshwolf update` | — |
+| 从时间戳备份回滚 `.dshwolf/` | `dshwolf restore` | — |
+| 定时无人值守重扫（零 token） | `dshwolf cron add … scan` | `wolf_schedule` |
 
-> **Tip**: you rarely need any of this — the plugin's job is to make the
-> brain self-maintaining. Run `dshwolf scan` only when you changed many files
-> outside the harness (e.g. a big `git pull`) and want the map rebuilt
-> immediately.
+> **提示**：这些基本都不需要——插件的职责就是让大脑自我维护。只有当你
+> 在 harness 之外改了大量文件（例如一次大 `git pull`）想立刻重建地图时，
+> 才需要跑 `dshwolf scan`。
 
-## How It Works
+## 工作原理
 
 ```
-Session starts
+会话开始
     |
-The plugin injects a token-budgeted digest: current goals, known mistakes,
-recent bug fixes, project map pointer
+插件注入预算封顶的摘要：当前目标、已知错误、最近 bug 修复、项目地图指针
     |
-Agent decides to read a big file
+agent 决定读一个大文件
     |
-The plugin: "auth.ts (~2,900 tok). Symbols: validateToken L82-140 ~450 tok.
-Read with offset/limit to fetch just the part you need."
+插件："auth.ts (~2,900 tok)。符号: validateToken L82-140 ~450 tok。
+用 offset/limit 只取你要的部分。"
     |
-Agent edits files
+agent 编辑文件
     |
-The plugin updates the index under a cross-process lock, logs the action,
-and refreshes the changed file's entry
+插件在跨进程锁下更新索引、记录动作、刷新被改文件的条目
     |
-Context compacts mid-session
+会话中途上下文压缩
     |
-The plugin snapshots state before compaction and re-injects a digest of the
-files already modified, so the agent does not redo finished work
+插件在压缩前快照状态，压缩后重新注入"本会话已改文件"摘要，
+agent 不会重做已完成的工作
     |
-Session ends
+会话结束
     |
-The plugin reads the real token usage from the harness token meter into
-the ledger
+插件从 harness token meter 读取真实用量写入账本
 ```
 
-The harness preloads the code map through the built-in `agent-instructions`
-plugin: the plugin maintains a marker-fenced block inside your workspace
-`AGENTS.md` (your own content is never touched, an identical block is never
-rewritten), so every session starts with the map already in context.
+代码地图通过 harness 内置的 `agent-instructions` 插件预载：插件在工作区
+`AGENTS.md` 内维护一个标记围栏块（你自己的内容从不被改动，相同内容绝不重写），
+所以每个会话开始时地图已经在上下文里。
 
-## Context Management
+## 上下文管理
 
-- **Session digest.** The highest-value state is pushed into the model's
-  context at session start, capped to a configurable token budget. Section
-  costs are priced with the harness token meter's heuristic when available.
-  The model gets what it needs without reading six files.
-- **Compaction survival.** A `compaction/start` snapshot; after compaction the
-  digest lists the files already modified with a pointer to the action log.
-  Resume and compaction no longer reset tracking.
-- **Staleness detection.** Scans pin the git HEAD. If the HEAD moves or the
-  scan ages out, the agent is told to rescan before trusting the map. A wrong
-  index is never silently trusted.
-- **STATUS.md handoff.** End-of-phase state lives in one small document, so a
-  fresh session reaches productive context in a single read.
-- **Housekeeping reminders.** Sparse cerebrum → use `wolf_learn`; empty
-  buglog → use `wolf_bug`. The plugin nudges, the model feeds the brain.
+- **会话摘要。** 会话开始时把最高价值状态推进模型上下文，按可配置的 token
+  预算封顶（各段成本优先用 harness token meter 的启发式计价）。模型不需要
+  读六个文件就能拿到所需。
+- **压缩幸存。** `compaction/start` 快照；压缩后摘要列出已修改文件并指向
+  动作日志。恢复与压缩不再重置跟踪。
+- **陈旧检测。** 扫描钉住 git HEAD。HEAD 移动或扫描超龄时，agent 会被提示
+  先重扫再信任地图——错误索引绝不会被静默信任。
+- **STATUS.md 交接。** 阶段末状态放在一份小文档里，新会话一次读取即达生产性
+  上下文。
+- **维护提醒。** cerebrum 过少 → 用 `wolf_learn`；buglog 为空 → 用
+  `wolf_bug`。插件提醒，模型喂大脑。
 
-## Project Anatomy
+## 项目解剖
 
-The index is a durable store (`anatomy-index.json`) with a rendered,
-human-readable view (`anatomy.md`). Writers coordinate through a
-cross-process lock, so concurrent hook fires cannot lose entries. Edits made
-to the markdown by hand are detected by content hash and absorbed additively.
+索引是持久存储（`anatomy-index.json`）加人类可读渲染（`anatomy.md`）。写入方
+通过跨进程锁协调，并发 hook 触发不丢条目。手改 markdown 会被内容哈希检测并
+**加性吸收**（绝不覆盖）。
 
-Files above 500 estimated tokens also index their top-level symbols:
+超过 500 估算 token 的文件还索引顶层符号：
 
 ```
 - `shared.ts` (~3,200 tok)
@@ -283,18 +252,15 @@ Files above 500 estimated tokens also index their top-level symbols:
   - fn `serializeAnatomy` L106-129 (~200 tok)
 ```
 
-Before the agent reads a large file, the hint lists the biggest symbols with
-line ranges so it can fetch one function with offset/limit instead of the
-whole file. Hints are suppressed automatically if the file changed since
-indexing; a stale range is never allowed to misdirect a read. Symbol support
-today: TypeScript, JavaScript, Python, Go, Rust, Java (lezer CST parsing,
-optional dependencies — other languages fall back to the regex heuristic).
+在大文件被读取前，提示列出最大的符号及其行号，agent 用 offset/limit 取一个
+函数而不是整个文件。文件在索引后变过则自动抑制提示——过期行号绝不会误导读取。
+当前符号支持：TypeScript、JavaScript、Python、Go、Rust、Java（lezer CST
+解析，可选依赖——其余语言回退正则启发式）。
 
-## Token Intelligence
+## Token 智能
 
-Estimates are useful; measurements are trustworthy. The plugin reads real
-usage from the harness token meter (`ctx.tokenMeter`, provider-reported) and
-upserts it into the ledger per session:
+估算有用，实测可信。插件从 harness token meter（`ctx.tokenMeter`，
+provider 上报）读取真实用量，按会话写入账本：
 
 ```bash
 dshwolf report
@@ -307,206 +273,188 @@ estimated (heuristic): ~1,420,011 tokens
 current session: ~57,489 tokens
 ```
 
-**Measured A/B in DeepSeek Harness** (same 1-read/1-edit task on identical
-3-file fixtures, provider-reported totals):
+**DeepSeek Harness 实测 A/B**（同一"1 读 1 编辑"任务、同一份 3 文件工作区、
+provider 上报合计）：
 
-| Run | Reads | Edits | Billed tokens |
+| 运行 | 读取 | 编辑 | 计费 tokens |
 | --- | --- | --- | --- |
-| with dsh-openwolf | 1 | 1 | 39,164 |
-| without | 1 | 1 | 35,488 |
-| **delta** | | | **+3,676 (+10%)** |
+| 带 dsh-openwolf | 1 | 1 | 39,164 |
+| 不带 | 1 | 1 | 35,488 |
+| **差值** | | | **+3,676（+10%）** |
 
-**Reading this honestly**: on a minimal one-read task the plugin is a *net
-overhead* — its fixed costs dominate. The savings mechanism (avoiding
-re-reads, offset/limit reads, map-first navigation) only pays off once a
-session reads multiple files or re-reads the same file. The reference
-project's field data (heuristic estimates) averaged **~65.8% token reduction
-across 20 projects / 132 sessions, with 71% of repeated reads caught**.
-Expect the plugin to **break even once a session touches a handful of files
-or runs long**.
+**诚实解读**：在"单次读取"的最小任务上，插件是**净开销**——固定成本占优。
+省 token 的机制（避免重复读、offset/limit 定向读、地图优先导航）要等会话读
+多个文件或重复读同一文件时才兑现。原版项目字段数据（启发式估算）平均
+**~65.8% token 下降、拦下 71% 的重复读**。预期：**会话触及多个文件或足够长
+时回本**。
 
-What the plugin adds per session:
+插件每个会话新增什么：
 
-| Component | Per | Size |
+| 组件 | 频次 | 大小 |
 | --- | --- | --- |
-| Session digest (+ housekeeping reminder) | session start | ≤ 1,500 tokens (config) |
-| `AGENTS.md` map block (when `injectAgentsMd`) | session baseline | ≤ `maxMapBytes` (16 KiB ≈ 4k tokens) |
-| 10 `wolf_*` tool schemas | every request | ≈ 1–2k tokens (KV-cache prefix-stable) |
-| 2 skill catalog entries | session baseline | ≈ 100 tokens |
+| 会话摘要（+维护提醒） | 会话开始 | ≤ 1,500 tokens（可配） |
+| `AGENTS.md` 地图块（`injectAgentsMd` 开启时） | 会话基线 | ≤ `maxMapBytes`（16 KiB ≈ 4k tokens） |
+| 10 个 `wolf_*` 工具 schema | **每个请求** | ≈ 1–2k tokens（KV-cache 前缀稳定） |
+| 2 条技能目录条目 | 会话基线 | ≈ 100 tokens |
 
-For one-shot tiny tasks, consider `digestEnabled: false` /
-`injectAgentsMd: false` / a smaller `maxMapBytes`.
+一次性小任务可考虑 `digestEnabled: false` / `injectAgentsMd: false` /
+调小 `maxMapBytes`。
 
-## Security
+## 安全
 
-- The dashboard binds to 127.0.0.1 and requires a per-project token
-  (timing-safe comparison) for all API access; the token may live in a
-  `--token-file` (created `chmod 600`) so it never appears on argv.
-- Every dynamic process invocation uses argument arrays; no shell
-  interpolation anywhere.
-- Path traversal guards on all file access.
-- Secret-bearing files (keys, keystores, credential files, `.npmrc`, `.env`
-  and friends) never enter the index, hints, or logs; templates
-  (`.env.example`) stay indexable.
-- A security regression suite runs with `pnpm test`.
+- 仪表盘只绑定 127.0.0.1，所有 API 访问需要逐项目 token（timing-safe
+  比较）；token 可放 `--token-file`（`chmod 600`），不出现在命令行参数里。
+- 所有动态进程调用使用参数数组，任何地方都不做 shell 插值。
+- 所有文件访问都有路径穿越防护。
+- 密钥类文件（keys、keystores、凭据文件、`.npmrc`、`.env` 等）绝不进入索引、
+  提示或日志；模板（`.env.example`）保持可索引。
+- 安全回归套件随 `pnpm test` 运行。
 
-## Bundled Skills
+## 内置技能
 
-Two skills register into the harness skill catalog:
+两个技能注册进 harness 技能目录：
 
-- **`wolf-security-audit`** — layered audit (dependencies → secrets →
-  injection surfaces → authorization) ending in a severity-ranked report wired
-  into `.dshwolf/buglog.json`.
-- **`wolf-reframe`** — the design brain. Pick or migrate a UI framework from a
-  13-framework knowledge base, or audit/fix existing UI against an
-  anti-generic design mandate: distinctiveness is an acceptance criterion, and
-  the recognizable AI-generated look is a failure state.
+- **`wolf-security-audit`** —— 分层审计（依赖 → 秘密 → 注入面 → 授权），
+  产出严重度排序报告并写入 `.dshwolf/buglog.json`。
+- **`wolf-reframe`** —— 设计大脑。从 13 框架知识库挑选或迁移 UI 框架，或按
+  反"AI 味"设计准则审计/修复现有 UI：独特性是验收标准，一眼可辨的 AI 生成
+  外观是失败态。
 
-## Dashboard
+## 仪表盘
 
 ```bash
 dshwolf daemon start
 dshwolf dashboard
 ```
 
-A local, token-authenticated dashboard: measured vs estimated tokens,
-context health (scan freshness, pinned git HEAD, digest budget), session
-handoff, live activity, cron control, and the anatomy browser with per-file
-symbols. Panels are deep-linkable (`/#tokens`). The page is live — an SSE
-stream re-renders the active panel the moment a brain file changes, with a
-30s poll as fallback when the stream drops.
+本地、token 认证的仪表盘：实测 vs 估算 token、上下文健康（扫描新鲜度、钉住的
+git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐文件符号的 anatomy
+浏览器。面板可深链（`/#tokens`）。页面是**实时**的——SSE 流在 brain 文件一变
+就重渲染当前面板，流断开时回退 30s 轮询。
 
-## Commands
+## 命令
 
-All commands take an optional directory (default: current working directory).
-They are grouped by what you are trying to do:
+所有命令都接受可选目录参数（默认当前工作目录）。按使用场景分组：
 
-**Brain lifecycle**
+**大脑生命周期**
 
-| Command | What it does | When to use it |
+| 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `dshwolf init [dir]` | Create `.dshwolf/` (idempotent); `--agent <profile\|all\|deepseek-harness>` also wires + installs into the harness | Usually unnecessary — the brain initializes itself on first use; `--agent` is the one-command Way 2 setup |
-| `dshwolf scan [dir]` | Rebuild the project index, render `anatomy.md`, inject `AGENTS.md` | After a big change outside the harness (e.g. `git pull`) when you want the map rebuilt now |
-| `dshwolf scan --check [dir]` | Verify the index matches the filesystem (size/mtime + git HEAD) | CI or pre-session verification; exits 1 on drift |
-| `dshwolf status [dir]` | Brain health: config, scan state, ledger, memory/buglog counts | "Is my brain healthy?" |
-| `dshwolf report [dir]` | Token ledger summary: measured vs estimated per session | Understanding where tokens went |
+| `dshwolf init [dir]` | 创建 `.dshwolf/`（幂等）；`--agent <profile\|all\|deepseek-harness>` 同时接线 + 安装进 harness | 通常不需要——大脑首次使用时自动初始化；`--agent` 是方式 2 的一条命令初始化 |
+| `dshwolf scan [dir]` | 重建项目索引、渲染 `anatomy.md`、注入 `AGENTS.md` | 在 harness 之外做了大改动（如 `git pull`）想立刻重建地图 |
+| `dshwolf scan --check [dir]` | 校验索引与文件系统一致（size/mtime + git HEAD） | CI 或会话前校验；漂移退出码 1 |
+| `dshwolf status [dir]` | 大脑健康：配置、扫描状态、账本、memory/buglog 计数 | "我的大脑健康吗？" |
+| `dshwolf report [dir]` | token 账本摘要：各会话实测 vs 估算 | 弄清楚 token 花在哪 |
 
-**Harness wiring** (after a Way 2 standalone install)
+**harness 接线**（方式 2 独立安装后）
 
-| Command | What it does | When to use it |
+| 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `dshwolf harness status` | List DSH profiles and whether each has `dsh-openwolf` wired | "Which of my profiles already have the plugin?" |
-| `dshwolf harness add [name]` | Wire the plugin into a profile's `package.json` (dependencies + bundles) **and run `pnpm install`** (default profile `web`; `--no-install` to edit only) | After a Way 2 standalone install, to get the in-session experience in one command (then restart) |
+| `dshwolf harness status` | 列出 DSH profiles，标出哪些已接 dsh-openwolf | "我哪些 profile 已经装了插件？" |
+| `dshwolf harness add [name]` | 把插件写进某 profile 的 `package.json`（dependencies + bundles）**并自动运行 `pnpm install`**（默认 profile `web`；`--no-install` 只改文件） | 方式 2 独立安装后，一条命令获得会话内体验（然后重启） |
 
-**Memory and bugs**
+**记忆与 bug**
 
-| Command | What it does | When to use it |
+| 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `dshwolf bug search <term>` | Search `.dshwolf/buglog.json` | Before re-debugging something that may already be fixed |
-| `dshwolf register [dir]` | Add the workspace to the global project registry | Enables `dshwolf update` across all your projects |
-| `dshwolf unregister [dir]` | Remove it from the registry | Cleanup |
-| `dshwolf update` | Backup + rescan every registered workspace | Refresh all indexed projects at once |
+| `dshwolf bug search <term>` | 搜索 `.dshwolf/buglog.json` | 重新排查可能已修复的问题之前 |
+| `dshwolf register [dir]` | 把工作区加进全局项目注册表 | 让 `dshwolf update` 覆盖你所有项目 |
+| `dshwolf unregister [dir]` | 从注册表移除 | 清理 |
+| `dshwolf update` | 备份 + 重扫所有已注册工作区 | 一次性刷新所有已索引项目 |
 
-**Backups**
+**备份**
 
-| Command | What it does | When to use it |
+| 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `dshwolf backups [dir]` | List timestamped `.dshwolf/` backups | See what you can roll back to |
-| `dshwolf restore [dir] [tag]` | Restore `.dshwolf/` from a backup (newest by default) | After an experiment went wrong |
+| `dshwolf backups [dir]` | 列出时间戳 `.dshwolf/` 备份 | 看有哪些可回滚 |
+| `dshwolf restore [dir] [tag]` | 从备份恢复 `.dshwolf/`（默认最新） | 实验搞砸之后 |
 
-**Scheduling and serving**
+**调度与服务**
 
-| Command | What it does | When to use it |
+| 命令 | 作用 | 什么时候用 |
 |---|---|---|
-| `dshwolf cron add <name> '<expr>' <scan\|check> [dir]` | Schedule a zero-token task (cron syntax, `@daily` etc.) | Unattended refreshes: e.g. nightly `scan` |
-| `dshwolf cron list [dir]` / `dshwolf cron run <id>` / `dshwolf cron remove <id>` | Manage scheduled tasks | Inspect or trigger tasks by hand |
-| `dshwolf dashboard [dir]` | Serve the web dashboard in the foreground (`--port`, `--token`, `--token-file`) | Live overview of tokens / context / anatomy |
-| `dshwolf daemon start [dir]` / `dshwolf daemon stop` | Run dashboard + cron scheduler as a background daemon | Keep the dashboard and scheduled tasks running without a terminal |
+| `dshwolf cron add <name> '<expr>' <scan\|check> [dir]` | 定时零 token 任务（cron 语法、`@daily` 等） | 无人值守刷新：如每晚 `scan` |
+| `dshwolf cron list [dir]` / `dshwolf cron run <id>` / `dshwolf cron remove <id>` | 管理定时任务 | 查看或手动触发任务 |
+| `dshwolf dashboard [dir]` | 前台运行 Web 仪表盘（`--port` / `--token` / `--token-file`） | 实时查看 token / 上下文 / anatomy |
+| `dshwolf daemon start [dir]` / `dshwolf daemon stop` | 后台守护：仪表盘 + cron 调度 | 不占用终端地常驻仪表盘与定时任务 |
 
-Every command also exists as a session tool (`wolf_map`, `wolf_file`,
-`wolf_refresh`, `wolf_scan`, `wolf_init`, `wolf_status`, `wolf_learn`,
-`wolf_bug`, `wolf_report`, `wolf_schedule`) — the model can do all of this
-itself, so the CLI is only for humans, scripts, and cron.
+所有命令也以工具形式出现在会话里（`wolf_map`、`wolf_file`、`wolf_refresh`、
+`wolf_scan`、`wolf_init`、`wolf_status`、`wolf_learn`、`wolf_bug`、
+`wolf_report`、`wolf_schedule`）——模型自己能做这一切，CLI 只是给人、脚本和
+cron 用的。
 
-Global flags: `dshwolf --help` (grouped usage) and `dshwolf --version` work
-anywhere; a bare `dshwolf` also prints the help. Subcommand groups have their
-own help too — `dshwolf cron --help`, `dshwolf daemon --help`,
-`dshwolf bug --help`, `dshwolf harness --help` (or just the group name). The
-old `wolf` name still works as an alias.
+全局选项：`dshwolf --help`（分组帮助）与 `dshwolf --version` 随处可用；裸 `dshwolf`
+也打印帮助。子命令组也有自己的帮助——`dshwolf cron --help`、`dshwolf daemon --help`、
+`dshwolf bug --help`、`dshwolf harness --help`（或只敲组名）。旧名 `wolf` 仍可
+作为别名使用。
 
-## Requirements
+## 环境要求
 
 - Node.js 20+
-- A DeepSeek Harness profile (any: `web`, `headless`, …)
-- Windows, macOS, or Linux
+- 任意 DeepSeek Harness profile（`web`、`headless`、…）
+- Windows、macOS 或 Linux
 
-## Config
+## 配置
 
-Everything is schema-validated with sane defaults; nothing needs configuring.
-Override any option in your profile's `cordis.patch.yml` (row id `openwolf`):
+所有选项经 schema 校验、默认值合理；**无需配置任何东西**。在 profile 的
+`cordis.patch.yml` 中按行 id（`openwolf`）覆盖：
 
 ```yaml
 - id: openwolf
   config:
-    maxMapBytes: 16384        # cap on the injected/returned map text (bytes)
-    maxFileBytes: 65536       # files larger than this are listed, not opened
-    maxFiles: 4000            # hard cap on scanned files per workspace
-    watch: true               # debounced watcher rescans on file changes
-    injectAgentsMd: true      # maintain the AGENTS.md managed block
-    useGitignore: true        # honor the root .gitignore
-    symbols: true             # extract top-level symbols
-    symbolBackend: auto       # auto | regex | lezer (CST parsing)
-    sessionDigestBudgetTokens: 1500   # cap on the injected session digest
-    rescanIntervalHours: 6    # staleness window before a rescan warning
-    symbolThresholdTokens: 500        # files above this get symbol line-range hints
-    digestEnabled: true       # inject the session digest on session start
-    interceptReads: true      # repeated-read warnings + anatomy hints
-    interceptWrites: true     # action log + single-file index refresh
-    compactionSurvival: true  # snapshot + restore digest on compaction
-    skillsEnabled: true       # register wolf-security-audit + wolf-reframe
-    autoRescanMinutes: 0      # auto-rescan cached roots every N minutes (0 = off)
+    maxMapBytes: 16384        # 注入/返回地图文本的上限（字节）
+    maxFileBytes: 65536       # 超过此大小的文件只列不读
+    maxFiles: 4000            # 每个工作区扫描文件数上限
+    watch: true               # 防抖 watcher，文件变更自动重扫
+    injectAgentsMd: true      # 维护 AGENTS.md 受管块
+    useGitignore: true        # 遵循根目录 .gitignore
+    symbols: true             # 提取顶层符号
+    symbolBackend: auto       # auto | regex | lezer（CST 解析）
+    sessionDigestBudgetTokens: 1500   # 注入的会话摘要 token 上限
+    rescanIntervalHours: 6    # 重扫警告前的陈旧窗口
+    symbolThresholdTokens: 500        # 超过此 token 数的文件给符号行号提示
+    digestEnabled: true       # 会话开始时注入会话摘要
+    interceptReads: true      # 重复读警告 + anatomy 提示
+    interceptWrites: true     # 动作日志 + 单文件索引刷新
+    compactionSurvival: true  # 压缩快照 + 恢复摘要
+    skillsEnabled: true       # 注册 wolf-security-audit + wolf-reframe
+    autoRescanMinutes: 0      # 每 N 分钟自动重扫缓存根（0 = 关）
 ```
 
-A later layer can override the whole row by `id`, so deployments keep their
-own defaults.
+后层可按 `id` 整体覆盖该行，部署方保留自己的默认值。
 
-## Limitations
+## 限制
 
-- **Measured vs estimated** — measured figures come from the harness token
-  meter and are exact; heuristic estimates are a char-ratio approximation.
-- **Multi-agent wiring is N/A** — the reference hooks five external agents
-  (Claude Code/Codex/OpenCode/Gemini/Cursor); DSH is the agent platform
-  itself, so one brain serves every DSH session and subagent.
-- **The cron engine is self-contained** — zero token per run, chosen
-  deliberately over the harness's model-facing scheduler (which burns an LLM
-  turn per trigger).
-- **Dashboard is a server-rendered single page** (zero deps) with a panel
-  subset, not a React SPA.
-- **Root-level `.gitignore` only** — nested `.gitignore` files and
-  `git check-ignore` exactness are not supported yet.
-- **Read hints ride the result** — `tools/post-execute` attaches hints as
-  result context (DSH has no pre-read seam yet).
-- **Digest injection depends on the agent lifecycle** — sessions resumed from
-  a persisted log skip the digest (history is intact, matching OpenWolf's
-  resume behavior).
-- Found something broken? [File an issue](https://github.com/hawk2048/dsh-openwolf/issues).
+- **实测 vs 估算** —— 实测数字来自 harness token meter，精确；启发式估算是
+  字符比近似。
+- **多 agent 接线 N/A** —— 原版钩 5 个外部 agent（Claude Code/Codex/
+  OpenCode/Gemini/Cursor）；DSH 本身是 agent 平台，一个大脑服务所有 DSH
+  会话与子代理。
+- **cron 引擎自研** —— 每次运行 0 token，有意不接 harness 的模型面向调度器
+  （后者每次触发烧一次 LLM 轮次）。
+- **dashboard 是零依赖服务器渲染单页**（面板子集），非 React SPA。
+- **仅根级 `.gitignore`** —— 暂不支持嵌套 `.gitignore` 与 `git check-ignore`
+  的精确语义。
+- **读提示随结果到达** —— `tools/post-execute` 把提示附加在结果上下文上
+  （DSH 目前没有读前拦截缝）。
+- **摘要注入依赖 agent 生命周期** —— 从持久日志恢复的会话跳过摘要（历史
+  完整，与原版 resume 行为一致）。
+- 发现问题？[提交 issue](https://github.com/hawk2048/dsh-openwolf/issues)。
 
-## Development
+## 开发
 
 ```sh
 pnpm install
 pnpm build        # tsc → lib/
-pnpm test         # node --test, in-process
+pnpm test         # node --test，进程内执行
 ```
 
-The package is **erasable TypeScript** with `rewriteRelativeImportExtensions`,
-so `node` can run `src/` directly for tests while `tsc` emits the ESM `lib/`
-for publication. `prepare` builds from source, which is what makes git-based
-installs work. For running a local checkout inside a real harness profile,
-see [Installing from Source](docs/INSTALL-FROM-SOURCE.md).
+本包是**可擦除 TypeScript** + `rewriteRelativeImportExtensions`：`node` 可
+直接运行 `src/` 做测试，`tsc` 产出发布用的 ESM `lib/`。`prepare` 脚本从源码
+构建，这正是 git 安装能工作的原因。想在真实 harness profile 里跑本地
+checkout，见[从源码安装](docs/INSTALL-FROM-SOURCE.md)。
 
 ## License
 
-MIT — an independent implementation of the code-map/context-brain idea, with
-no code from any AGPL-licensed project. Built for
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
+MIT —— 对代码地图/上下文大脑思路的独立实现，不含任何 AGPL 项目的代码。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 构建。
