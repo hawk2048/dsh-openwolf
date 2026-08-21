@@ -5,7 +5,7 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
-## [Unreleased]
+## [0.10.0] — 2026-08-21
 
 ### Added
 
