@@ -12,7 +12,7 @@ import { currentGitHead, anatomyStaleReason } from '../lib/digest.js'
 import { startDashboard } from '../lib/dashboard.js'
 import { parseCron, dueTasks, nextMinuteDelay } from '../lib/cron.js'
 import { listProjects, registerProject, unregisterProject, backupBrain, listBackups, restoreBrain } from '../lib/registry.js'
-import { stat, readFile, writeFile, rm, mkdir, chmod, readdir } from 'node:fs/promises'
+import { stat, readFile, writeFile, rm, mkdir, chmod, readdir, realpath } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { join, resolve, dirname } from 'node:path'
@@ -697,6 +697,10 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
 }
 
 // Run as a binary only when executed directly (not when imported by tests).
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Compare against the REAL path: when invoked through a symlink (e.g.
+// /opt/homebrew/bin/dshwolf), argv[1] holds the link path while import.meta.url
+// resolves to the target — without realpath() the guard fails and main() never
+// runs, exiting 0 with no output.
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(await realpath(process.argv[1])).href) {
   process.exitCode = await main(process.argv.slice(2))
 }
