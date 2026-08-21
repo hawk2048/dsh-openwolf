@@ -5,6 +5,24 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [Unreleased]
+
+### Added
+
+- **`dshwolf import-openwolf [dir]` — one-way migration bridge from the
+  original OpenWolf brain (`.wolf/`) into `.dshwolf/`.** Projects coming from
+  OpenWolf (Claude Code / Codex / …) keep their learned state: `cerebrum.md`
+  sections merge with entry-level dedupe, `memory.md` table rows append
+  verbatim-deduped, `buglog.json` records merge keyed on
+  `error_message` + `file` (OpenWolf-only fields like `root_cause`, `tags`,
+  `occurrences` are carried along), and `STATUS.md` follows a policy
+  (`--status=auto|keep|overwrite|skip`; auto imports only when the target is
+  still the pristine template). The merge is additive and idempotent — a
+  timestamped `.dshwolf` backup is taken before the first change
+  (`--no-backup` to skip) and `--dry-run` previews without writing. Anatomy,
+  config, hooks, and token ledger are intentionally not imported (run
+  `dshwolf scan` to rebuild the dsh code map).
+
 ## [0.9.2] — 2026-08-21
 
 ### Fixed

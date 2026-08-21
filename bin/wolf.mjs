@@ -12,6 +12,7 @@ import { currentGitHead, anatomyStaleReason } from '../lib/digest.js'
 import { startDashboard } from '../lib/dashboard.js'
 import { parseCron, dueTasks, nextMinuteDelay } from '../lib/cron.js'
 import { listProjects, registerProject, unregisterProject, backupBrain, listBackups, restoreBrain } from '../lib/registry.js'
+import { importOpenWolf } from '../lib/import-openwolf.js'
 import { stat, readFile, writeFile, rm, mkdir, chmod, readdir, realpath } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
@@ -67,6 +68,8 @@ const USAGE = `usage: dshwolf <command> [args]
     dshwolf scan --check [dir]    verify index vs filesystem (CI-friendly; exit 1 on drift)
     dshwolf status [dir]          brain health: config, scan state, ledger, memory/buglog
     dshwolf report [dir]          token ledger summary
+    dshwolf import-openwolf [dir] merge an existing OpenWolf .wolf/ brain into .dshwolf/
+                                  (--from=<dir>, --dry-run, --no-backup, --status=auto|keep|overwrite|skip)
 
   Memory & bugs
     dshwolf bug search <term>     search the buglog
@@ -127,6 +130,23 @@ const HELP_HARNESS = `usage: dshwolf harness <status|add> [name]
                                    (default profile: web) and run pnpm install —
                                    then restart the harness. Use --no-install to
                                    only edit package.json (e.g. for CI).`
+
+const HELP_IMPORT = `usage: dshwolf import-openwolf [dir]
+
+  Merge an existing OpenWolf brain (.wolf/) into this workspace's
+  dsh-openwolf brain (.dshwolf/). Additive and idempotent: existing
+  dsh-openwolf data is never overwritten.
+
+    cerebrum.md  — sections merged, duplicate entries skipped
+    memory.md    — table rows appended, duplicates skipped
+    buglog.json  — records deduped by error_message + file
+    STATUS.md    — auto: imported only when the target is still the template
+
+  Options:
+    --from=<dir>    source brain directory (default: <dir>/.wolf)
+    --dry-run       preview the merge without writing anything
+    --no-backup     skip the timestamped .dshwolf backup before merging
+    --status=<mode> auto (default) | keep | overwrite | skip`
 
 /** Run one cron action against a workspace. */
 async function runCronAction(dir, action, io) {
@@ -365,6 +385,55 @@ export async function main(argv = [], io = { out: console.log, err: console.erro
       const stale = await anatomyStaleReason(brain, 6)
       io.err(`index drifted (${drift.length}):\n${drift.map((d) => `  - ${d.path}${d.sizeChanged ? ' (size)' : ''}${d.mtimeChanged ? ' (mtime)' : ''}`).join('\n')}${stale !== null ? `\n  ⚠ ${stale}` : ''}`)
       return 1
+    }
+    case 'import-openwolf': {
+      if (rest.includes('--help') || rest.includes('-h')) {
+        io.out(HELP_IMPORT)
+        return 0
+      }
+      const fromFlag = flagValue(rest, 'from', undefined)
+      const statusFlag = flagValue(rest, 'status', 'auto')
+      if (!['auto', 'keep', 'overwrite', 'skip'].includes(statusFlag)) {
+        io.err(`invalid --status=${statusFlag} (expected auto | keep | overwrite | skip)`)
+        return 2
+      }
+      const report = await importOpenWolf(dir, {
+        from: fromFlag !== undefined ? resolve(process.cwd(), fromFlag) : undefined,
+        dryRun: rest.includes('--dry-run'),
+        backup: !rest.includes('--no-backup'),
+        status: statusFlag,
+      })
+      if (!report.found) {
+        io.err(`no OpenWolf brain found at ${report.source} (use --from=<dir> to point at another location)`)
+        return 1
+      }
+      const lines = [`import-openwolf: ${report.source}`]
+      const cerebrum = report.cerebrum
+      lines.push(
+        cerebrum.entries > 0
+          ? `  cerebrum.md  +${cerebrum.entries} entr${cerebrum.entries === 1 ? 'y' : 'ies'} across ${cerebrum.sections} section${cerebrum.sections === 1 ? '' : 's'}`
+          : '  cerebrum.md  up to date',
+      )
+      lines.push(report.memory.rows > 0 ? `  memory.md    +${report.memory.rows} rows` : '  memory.md    up to date')
+      const bugs = report.bugs
+      lines.push(
+        bugs.added > 0
+          ? `  buglog.json  +${bugs.added} bug${bugs.added === 1 ? '' : 's'}${bugs.skipped > 0 ? ` (${bugs.skipped} duplicate${bugs.skipped === 1 ? '' : 's'} skipped)` : ''}`
+          : `  buglog.json  up to date${bugs.skipped > 0 ? ` (${bugs.skipped} duplicate${bugs.skipped === 1 ? '' : 's'} skipped)` : ''}`,
+      )
+      const st = report.status
+      const statusLine = {
+        imported: '  STATUS.md    imported from OpenWolf',
+        kept: `  STATUS.md    kept (${st.note ?? 'target has content'})`,
+        overwritten: '  STATUS.md    overwritten from OpenWolf',
+        skipped: `  STATUS.md    skipped (${st.note ?? '--status=skip'})`,
+        missing: '  STATUS.md    missing in source brain',
+      }[st.action]
+      lines.push(statusLine ?? `  STATUS.md    ${st.action}`)
+      if (report.backup !== null) lines.push(`  backup:      ${report.backup}`)
+      if (report.dryRun) lines.push('  (dry-run — no changes written)')
+      io.out(lines.join('\n'))
+      return 0
     }
     case 'status': {
       await brain.ensure()

@@ -161,9 +161,11 @@ dshwolf harness add web                   # 显式接线 + 安装到某个 profi
 > Codex / OpenCode / Gemini / Cursor）也使用 `.wolf/` 大脑。我们把大脑放在
 > 独立的 `.dshwolf/` 目录，意味着两个工具可以管理**同一个工作区**而互不覆盖
 > 彼此的配置、账本或记忆——未来的 OpenWolf 更新也永远不会逼着这里跟着改。
-> 从本插件旧位置（0.9 之前）迁移：`mv .wolf .dshwolf`。（文件*格式*遵循
-> OpenWolf 行为规范——cerebrum、STATUS、buglog、memory——所以一个项目可以
-> 选择其中任一大脑或两者并用。）
+> 从本插件旧位置（0.9 之前）迁移：`mv .wolf .dshwolf`。从**原版 OpenWolf**
+> 迁移：`dshwolf import-openwolf`——把 `.wolf/` 的 cerebrum、memory、buglog、
+> STATUS 增量合并进 `.dshwolf/`（内容级去重、先备份、幂等），详见
+> [命令](#命令)。（文件*格式*遵循 OpenWolf 行为规范——cerebrum、STATUS、
+> buglog、memory——所以一个项目可以选择任一大脑或两者并用。）
 
 ## 初始化与保持新鲜
 
@@ -345,6 +347,7 @@ git HEAD、摘要预算）、会话交接、实时活动、cron 控制、带逐�
 | `dshwolf scan --check [dir]` | 校验索引与文件系统一致（size/mtime + git HEAD） | CI 或会话前校验；漂移退出码 1 |
 | `dshwolf status [dir]` | 大脑健康：配置、扫描状态、账本、memory/buglog 计数 | "我的大脑健康吗？" |
 | `dshwolf report [dir]` | token 账本摘要：各会话实测 vs 估算 | 弄清楚 token 花在哪 |
+| `dshwolf import-openwolf [dir]` | 把已有 OpenWolf `.wolf/` 大脑合并进 `.dshwolf/`（cerebrum/memory/buglog/STATUS，内容级去重，`--dry-run`/`--from=<dir>`/`--status=…`） | 从 Claude Code 等带 OpenWolf 大脑的项目迁移到 dsh-openwolf |
 
 **harness 接线**（方式 2 独立安装后）
 
