@@ -5,6 +5,20 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.9.2] — 2026-08-21
+
+### Fixed
+
+- **`dshwolf` CLI silently did nothing when invoked through a symlink.**
+  The direct-execution guard in `bin/wolf.mjs` compared `import.meta.url`
+  (the real path after symlink resolution) with `pathToFileURL(argv[1])`
+  (the path as invoked). Global npm / Homebrew installs expose the bin via
+  a symlink (`/opt/homebrew/bin/dshwolf`), so the guard never matched and
+  every command (`init`, `scan`, `harness status/add`, …) exited `0` with
+  no output and no side effects. The guard now compares against
+  `realpath(argv[1])`. `bin/wolf.mjs` is also tracked as executable so
+  running from a git checkout works out of the box.
+
 ## [0.9.1] — 2026-08-15
 
 ### Changed (docs/packaging)
