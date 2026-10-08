@@ -5,6 +5,24 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.10.2] — 2026-10-08
+
+### Fixed
+
+- **The plugin market's on/off switch always fell back to "restart required"
+  (`bundle patch 含配置行/表达式, 热挂载仅支持纯 insert`), and a disable followed by
+  an enable left the plugin stuck off.** `cordis.patch.yml` repeated every
+  option as a `config:` block plus an `inject:` line; the market hot-mounts a
+  bundle row so its switch applies without a restart, and that path accepts
+  only plain `id`/`name` insert rows — anything else makes the whole patch read
+  as "contains config / expression rows", so the enable could not be persisted
+  (#575) and the durable state stayed disabled. The bundle patch is now a bare
+  `- insert: [{ id: openwolf, name: dsh-openwolf }]`.
+  **No behaviour changes:** every removed option is already the schema default
+  in `src/index.ts`, and the module declares `inject = ['tools']` itself.
+  Per-profile overrides belong in the profile's own `cordis.patch.yml`
+  (row id `openwolf`), which does not affect the hot-mount path.
+
 ## [0.10.1] — 2026-10-08
 
 ### Fixed

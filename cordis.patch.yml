@@ -1,49 +1,22 @@
 # The dsh-openwolf bundle patch. Applied after @deepseek-ai/dsh-base and before
-# the profile's own cordis.patch.yml, so every row here can be overridden by id
-# in a later layer.
+# the profile's own cordis.patch.yml, so this row can be overridden by id in a
+# later layer.
 #
 # One host-plane row: the service + the three model tools (wolf_map, wolf_file,
 # wolf_refresh). Tools register on the host `tools` registry, so every agent
 # sees them; each call resolves the session workspace from the agent header.
+#
+# Keep this file a PLAIN `id`/`name` insert. The plugin market hot-mounts a
+# bundle row so its on/off switch applies without a restart, and that path
+# accepts only bare `id`/`name` rows — a `config:` block, an `inject:` line, a
+# disable, or an expression makes the whole patch read as "contains config /
+# expression rows" and every toggle falls back to restart activation.
+#
+# Nothing is lost by keeping it bare: every option below used to be repeated
+# here, but each one is already the schema default in src/index.ts, and the
+# module itself declares `inject = ['tools']`. To override an option, set it in
+# your profile's cordis.patch.yml (row id `openwolf`) — user-layer config does
+# not affect the hot-mount path.
 - insert:
     - id: openwolf
       name: dsh-openwolf
-      inject: [tools]
-      config:
-        maxMapBytes: 16384
-        maxFileBytes: 65536
-        maxFiles: 4000
-        watch: true
-        injectAgentsMd: true
-        agentsMdFile: AGENTS.md
-        useGitignore: true
-        ignore:
-          - node_modules
-          - .git
-          - dist
-          - build
-          - coverage
-          - .venv
-          - __pycache__
-          - .next
-          - .cache
-          - .turbo
-          - .idea
-          - .vscode
-          - target
-          - out
-          - '*.log'
-        hidden: false
-        symbols: true
-        debounceMs: 1000
-        sortBy: path
-        # ── v0.2: the .dshwolf/ brain (OpenWolf-class context core, isolated) ─
-        brainEnabled: true
-        brainDir: .dshwolf
-        sessionDigestBudgetTokens: 1500
-        rescanIntervalHours: 6
-        symbolThresholdTokens: 500
-        digestEnabled: true
-        interceptReads: true
-        interceptWrites: true
-        compactionSurvival: true
