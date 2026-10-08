@@ -436,9 +436,20 @@ old `wolf` name still works as an alias.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js **>= 20.19.0** (`engines.node`)
+- DeepSeek Harness **>= 0.1.0-rc.6 < 0.3.0** (`engines.dsh`)
+- Host packages used at runtime (`peerDependencies`): `@deepseek-ai/dsh-tools`,
+  `@deepseek-ai/dsh-skill`, `@deepseek-ai/dsh-llm`, and `@deepseek-ai/dsh-session`
+  at `>= 0.1.0-rc.6`; `@deepseek-ai/cordis` at `^4.0.1`
 - A DeepSeek Harness profile (any: `web`, `headless`, …)
 - Windows, macOS, or Linux
+
+Verified on DSH `0.2.0-rc.2` (dsh-desktop 0.11.0) with cordis `4.0.4`.
+
+> The host contract lives in `package.json` (`engines.dsh` + `peerDependencies`), which is
+> what the plugin market reads to decide compatibility. `@deepseek-ai/dsh-session` is a peer
+> because it owns the session-format generation (`SESSION_FORMAT_VERSION`): a host that
+> changes the format must be visible in the declaration.
 
 ## Config
 

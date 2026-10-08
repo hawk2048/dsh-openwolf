@@ -393,9 +393,19 @@ cron 用的。
 
 ## 环境要求
 
-- Node.js 20+
+- Node.js **>= 20.19.0**（`engines.node`）
+- DeepSeek Harness **>= 0.1.0-rc.6 < 0.3.0**（`engines.dsh`）
+- 运行时用到的宿主包（`peerDependencies`）：
+  `@deepseek-ai/dsh-tools`、`@deepseek-ai/dsh-skill`、`@deepseek-ai/dsh-llm`、
+  `@deepseek-ai/dsh-session` 均 `>= 0.1.0-rc.6`，`@deepseek-ai/cordis` `^4.0.1`
 - 任意 DeepSeek Harness profile（`web`、`headless`、…）
 - Windows、macOS 或 Linux
+
+已在 DSH `0.2.0-rc.2`（dsh-desktop 0.11.0）+ cordis `4.0.4` 上验证。
+
+> 宿主版本以 `package.json` 的 `engines.dsh` 与 `peerDependencies` 为准 —— 插件市场按它们
+> 判定兼容性。`@deepseek-ai/dsh-session` 列为 peer，是因为会话格式代际
+> （`SESSION_FORMAT_VERSION`）由它持有：宿主换格式这类破坏必须能在声明层面被发现。
 
 ## 配置
 
