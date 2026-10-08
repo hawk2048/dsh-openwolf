@@ -5,6 +5,33 @@ All notable changes to **dsh-openwolf** are tracked here. The project follows a
 promoted to `latest` when verified. Version history follows
 [Keep a Changelog](https://keepachangelog.com/) loosely (added / changed / fixed).
 
+## [0.10.1] — 2026-10-08
+
+### Fixed
+
+- **Injected context poisoned every session-format-v4 session (the turn failed
+  with `format v4 message requires a producer-owned source kind`, and the same
+  session could no longer be renamed or deleted).** `wolfMessage()` attributed
+  its `agent.inject()` / `additionalContexts` messages with the retired
+  `{ kind: 'plugin', plugin: 'dsh-openwolf' }` wrapper. Session format v4
+  refuses that wrapper, and the refusal is sticky: the rejected append poisons
+  the live session, so every later append (`turn/end`, projection cache,
+  delete) fails too. The attribution now follows the receiving session — the
+  producer-owned `{ kind: 'plugin:dsh-openwolf' }` for v4 sessions, the
+  historical wrapper only for pre-v4 ones — and all four injection sites pass
+  the live session through.
+
+### Changed (host contract)
+
+- **The DSH dependency is now declared explicitly.** `engines.dsh`
+  (`>=0.1.0-rc.6 <0.3.0`) states the supported DSH release line, and
+  `@deepseek-ai/dsh-session` — the package that owns the session format
+  generation — joined `peerDependencies` alongside `dsh-tools`, `dsh-skill`,
+  and `dsh-llm` (host peers widened from `^0.1.0-rc.6`, whose implicit `0.x`
+  caret ceiling both understated the supported floor and hid the 0.2 line).
+  Previously nothing in the manifest described the session-format surface, so
+  the v4 refusal above could not be caught by any compatibility preflight.
+
 ## [0.10.0] — 2026-08-21
 
 ### Added

@@ -1,6 +1,6 @@
 {
     "name": "dsh-openwolf",
-    "version": "0.10.0",
+    "version": "0.10.1",
     "description": "A compact code-map 'second brain' for DeepSeek Harness: pre-indexed project maps, per-file digests, session digests, read/write interception, and AGENTS.md injection so the agent stops re-reading whole files.",
     "type": "module",
     "main": "lib/index.js",
@@ -20,7 +20,8 @@
         "README-en.md"
     ],
     "engines": {
-        "node": ">=20.19.0"
+        "node": ">=20.19.0",
+        "dsh": ">=0.1.0-rc.6 <0.3.0"
     },
     "scripts": {
         "build": "tsc -p tsconfig.json",
@@ -62,10 +63,11 @@
         "@lezer/rust": "^1.0.2"
     },
     "peerDependencies": {
-        "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
-        "@deepseek-ai/dsh-skill": "^0.1.0-rc.6",
-        "@deepseek-ai/cordis": "^4.0.1",
-        "@deepseek-ai/dsh-llm": "^0.1.0-rc.6"
+        "@deepseek-ai/dsh-tools": ">=0.1.0-rc.6",
+        "@deepseek-ai/dsh-skill": ">=0.1.0-rc.6",
+        "@deepseek-ai/dsh-llm": ">=0.1.0-rc.6",
+        "@deepseek-ai/dsh-session": ">=0.1.0-rc.6",
+        "@deepseek-ai/cordis": "^4.0.1"
     },
     "devDependencies": {
         "@types/node": "^24.0.0",

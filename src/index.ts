@@ -152,11 +152,52 @@ interface CacheEntry {
   watcher: FSWatcher | null
 }
 
-/** A user-role context message owned by this plugin. */
-function wolfMessage(text: string) {
+/**
+ * Session format generation at which producer-owned sources became mandatory.
+ * Format v4 refuses the retired `{kind:'plugin', plugin}` wrapper, and the
+ * refusal is sticky: the offending append poisons the live session, so every
+ * later append (`turn/end`, projection cache) and the session delete fail too.
+ */
+const PRODUCER_OWNED_SESSION_FORMAT = 4
+
+/** Producer-owned source kind this plugin attributes its own messages with. */
+const PRODUCER_SOURCE_KIND = `plugin:${name}`
+
+/** The slice of a live session needed to read its format generation. */
+interface SessionFormatCarrier {
+  header?: { version?: number }
+}
+
+/**
+ * Session format generation recorded by one live session header, or `0` when
+ * the header is missing or carries no integer generation (treated as pre-v4).
+ */
+function sessionFormatVersionOf(session: SessionFormatCarrier | undefined): number {
+  const version = session?.header?.version
+  return typeof version === 'number' && Number.isInteger(version) ? version : 0
+}
+
+/**
+ * A user-role context message owned by this plugin.
+ *
+ * The attribution follows the session the message lands in: released v3
+ * sessions keep the historical `{kind:'plugin', plugin}` wrapper (the v3→v4
+ * reader rewrites it during migration), while v4 sessions — which refuse that
+ * wrapper outright — are attributed with the producer-owned kind.
+ *
+ * @param text - the context text to inject.
+ * @param session - the session receiving the message; omit only when the caller
+ *   genuinely has no session, which yields the legacy (pre-v4) attribution.
+ */
+function wolfMessage(text: string, session?: SessionFormatCarrier) {
+  const source = (
+    sessionFormatVersionOf(session) >= PRODUCER_OWNED_SESSION_FORMAT
+      ? { kind: PRODUCER_SOURCE_KIND }
+      : { kind: 'plugin', plugin: name }
+  ) as Parameters<typeof createUserMessage>[0]['source']
   return createUserMessage({
     content: [{ type: 'text', text }],
-    source: { kind: 'plugin', plugin: 'dsh-openwolf' },
+    source,
   })
 }
 
@@ -308,6 +349,7 @@ export function apply(ctx: Context, config: Config) {
         if (files.length > 0) {
           agent.inject(wolfMessage(
             `## Session in progress (context was just compacted)\nFiles already modified this session: ${files.join(', ')}. Do not re-read them wholesale — check .dshwolf/memory.md for what was done.`,
+            agent.session,
           ))
         }
         return
@@ -331,7 +373,7 @@ export function apply(ctx: Context, config: Config) {
         : undefined
       const digest = await buildSessionDigestWithWarning(brain, budget, config.rescanIntervalHours, estimate)
       if (digest !== '') {
-        agent.inject(wolfMessage(digest))
+        agent.inject(wolfMessage(digest, agent.session))
       }
       // Housekeeping reminders: nudge the model to keep the brain fed.
       try {
@@ -349,7 +391,7 @@ export function apply(ctx: Context, config: Config) {
           reminders.push('📋 .dshwolf/buglog.json is empty. Log any bugs you find or fix with wolf_bug.')
         }
         if (reminders.length > 0) {
-          agent.inject(wolfMessage(reminders.join('\n')))
+          agent.inject(wolfMessage(reminders.join('\n'), agent.session))
         }
       } catch {
         // best-effort
@@ -487,7 +529,7 @@ export function apply(ctx: Context, config: Config) {
         if (hints.length > 0 && decision.kind === 'accept') {
           return {
             ...decision,
-            additionalContexts: [...(decision.additionalContexts ?? []), wolfMessage(hints.join('\n'))],
+            additionalContexts: [...(decision.additionalContexts ?? []), wolfMessage(hints.join('\n'), exec.agent.session)],
           }
         }
         return decision
